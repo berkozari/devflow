@@ -1,28 +1,33 @@
 import type { ErrorRequestHandler } from "express";
-import { AppError } from "../utils/app-error.js";
+import { ZodError } from "zod";
 
-export const errorMiddleware: ErrorRequestHandler = (
+export const errorHandler: ErrorRequestHandler = (
     error,
     _req,
     res,
     _next,
 ) => {
-    const isOperational = error instanceof AppError;
-
-    const statusCode = isOperational
-        ? error.statusCode
-        : 500;
-
-    const message = isOperational
-        ? error.message
-        : "Internal server error";
-
-    if (!isOperational) {
-        console.error("[DevFlow Error]", error);
+    if (error instanceof ZodError) {
+        res.status(400).json({
+            success: false,
+            message: "Validation failed",
+            errors: error.issues,
+        });
+        return;
     }
+
+    const statusCode =
+        error instanceof Error &&
+            "statusCode" in error &&
+            typeof error.statusCode === "number"
+            ? error.statusCode
+            : 500;
 
     res.status(statusCode).json({
         success: false,
-        message,
+        message:
+            statusCode === 500
+                ? "Internal server error"
+                : error.message,
     });
 };

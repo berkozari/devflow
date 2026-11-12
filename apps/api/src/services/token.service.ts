@@ -5,11 +5,6 @@ import jwt from "jsonwebtoken";
 
 import { env } from "../config/env.js";
 
-interface AccessTokenPayload {
-    sub: string;
-    email: string;
-}
-
 export const tokenService = {
     generateAccessToken(user: {
         id: string;

@@ -1,10 +1,43 @@
 
 import { projectRepository } from "../repositories/project.repository.js";
+import { AppError } from "../utils/app-error.js";
+
 import type {
     CreateProjectInput,
     UpdateProjectInput,
     ProjectQueryInput,
 } from "../schemas/project.schema.js";
+
+type ProjectAccessRole = "OWNER" | "ADMIN" | "MEMBER";
+
+function getProjectRole(
+    project: {
+        ownerId: string;
+        members: Array<{
+            userId: string;
+            role: ProjectAccessRole;
+        }>;
+    },
+    userId: string,
+): ProjectAccessRole {
+    // Project.ownerId is the canonical owner reference.
+    if (project.ownerId === userId) {
+        return "OWNER";
+    }
+
+    const membership = project.members.find(
+        (member) => member.userId === userId,
+    );
+
+    if (!membership) {
+        throw new AppError(
+            "Insufficient project permissions",
+            403,
+        );
+    }
+
+    return membership.role;
+}
 
 export const projectService = {
     async create(userId: string, data: CreateProjectInput) {
@@ -22,7 +55,7 @@ export const projectService = {
         );
 
         if (!project) {
-            throw new Error("PROJECT_NOT_FOUND");
+            throw new AppError("Project not found", 404);
         }
 
         return project;
@@ -39,12 +72,44 @@ export const projectService = {
         );
 
         if (!existingProject) {
-            throw new Error("PROJECT_NOT_FOUND");
+            throw new AppError("Project not found", 404);
         }
 
-        await projectRepository.update(projectId, userId, data);
+        const actorRole = getProjectRole(
+            existingProject,
+            userId,
+        );
 
-        return projectRepository.findById(projectId, userId);
+        if (actorRole !== "OWNER" && actorRole !== "ADMIN") {
+            throw new AppError(
+                "Insufficient project permissions",
+                403,
+            );
+        }
+
+        const result = await projectRepository.update(
+            projectId,
+            userId,
+            data,
+        );
+
+        if (result.count === 0) {
+            throw new AppError(
+                "Project not found or access denied",
+                404,
+            );
+        }
+
+        const updatedProject = await projectRepository.findById(
+            projectId,
+            userId,
+        );
+
+        if (!updatedProject) {
+            throw new AppError("Project not found", 404);
+        }
+
+        return updatedProject;
     },
 
     async delete(projectId: string, userId: string) {
@@ -54,10 +119,29 @@ export const projectService = {
         );
 
         if (!existingProject) {
-            throw new Error("PROJECT_NOT_FOUND");
+            throw new AppError("Project not found", 404);
         }
 
-        await projectRepository.delete(projectId, userId);
+        const actorRole = getProjectRole(
+            existingProject,
+            userId,
+        );
+
+        if (actorRole !== "OWNER") {
+            throw new AppError(
+                "Only the project owner can delete this project",
+                403,
+            );
+        }
+
+        const result = await projectRepository.delete(
+            projectId,
+            userId,
+        );
+
+        if (result.count === 0) {
+            throw new AppError("Project not found", 404);
+        }
 
         return { success: true };
     },

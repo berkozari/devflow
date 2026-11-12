@@ -8,11 +8,17 @@ import {
     projectQuerySchema,
 } from "../schemas/project.schema.js";
 
-function handleError(error: unknown, next: (error?: unknown) => void) {
-    if (error instanceof Error && error.message === "PROJECT_NOT_FOUND") {
-        next(Object.assign(new Error("Project not found"), {
-            statusCode: 404,
-        }));
+import { AppError } from "../utils/app-error.js";
+
+function handleError(
+    error: unknown,
+    next: (error?: unknown) => void,
+) {
+    if (
+        error instanceof Error &&
+        error.message === "PROJECT_NOT_FOUND"
+    ) {
+        next(new AppError("Project not found", 404));
         return;
     }
 

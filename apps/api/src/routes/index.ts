@@ -4,6 +4,7 @@ import userRouter from "./user.routes.js";
 import adminRouter from "./admin.routes.js";
 import projectRouter from "./project.routes.js";
 import projectMemberRouter from "./project-member.routes.js";
+import taskRouter from "./task.routes.js";
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.use("/users", userRouter);
 router.use("/admin", adminRouter);
 router.use("/projects", projectRouter);
 router.use("/projects", projectMemberRouter);
+router.use("/projects/:projectId/tasks", taskRouter);
 
 export default router;

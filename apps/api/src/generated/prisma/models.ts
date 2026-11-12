@@ -10,4 +10,9 @@
  */
 export type * from './models/User.js'
 export type * from './models/RefreshToken.js'
+export type * from './models/Project.js'
+export type * from './models/ProjectMember.js'
+export type * from './models/Task.js'
+export type * from './models/Comment.js'
+export type * from './models/ActivityLog.js'
 export type * from './commonInputTypes.js'

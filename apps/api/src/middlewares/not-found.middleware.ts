@@ -1,15 +1,9 @@
-import type { RequestHandler } from "express";
-import { AppError } from "../utils/app-error.js";
 
-export const notFoundMiddleware: RequestHandler = (
-    req,
-    _res,
-    next,
-) => {
-    next(
-        new AppError(
-            `Route not found: ${req.method} ${req.originalUrl}`,
-            404,
-        ),
-    );
+import type { RequestHandler } from "express";
+
+export const notFoundHandler: RequestHandler = (req, res) => {
+    res.status(404).json({
+        success: false,
+        message: `Route ${req.method} ${req.originalUrl} not found`,
+    });
 };

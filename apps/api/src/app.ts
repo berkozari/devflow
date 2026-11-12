@@ -1,37 +1,39 @@
+
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 
+import { env } from "./config/env.js";
+
 import apiRouter from "./routes/index.js";
-import { notFoundMiddleware } from "./middlewares/not-found.middleware.js";
-import { errorMiddleware } from "./middlewares/error.middleware.js";
-import cookieParser from "cookie-parser";
+
+import { notFoundHandler } from "./middlewares/not-found.middleware.js";
+import { errorHandler } from "./middlewares/error.middleware.js";
 
 const app = express();
 
+// Security headers
 app.use(helmet());
 
+// CORS
 app.use(
     cors({
-        origin: "http://localhost:5173",
+        origin: env.clientUrl,
         credentials: true,
     }),
 );
 
-app.use(express.json());
-app.use(cookieParser());
+// Body parsing
+app.use(express.json({ limit: "10kb" }));
+app.use(express.urlencoded({ extended: true }));
 
-app.get("/api/health", (_req, res) => {
-    res.status(200).json({
-        success: true,
-        message: "DevFlow API is running",
-        timestamp: new Date().toISOString(),
-    });
-});
-
+// API routes
 app.use("/api/v1", apiRouter);
 
-app.use(notFoundMiddleware);
-app.use(errorMiddleware);
+// 404 handler
+app.use(notFoundHandler);
+
+// Global error handler
+app.use(errorHandler);
 
 export default app;

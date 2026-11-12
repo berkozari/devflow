@@ -1,0 +1,11 @@
+{
+  "name": "devflow",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@12.18.0",
+  "scripts": {
+    "dev:web": "pnpm --filter @devflow/web dev",
+    "dev:api": "pnpm --filter @devflow/api dev",
+    "build": "pnpm -r build"
+  }
+}

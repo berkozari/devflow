@@ -1,5 +1,7 @@
+
 import type { ErrorRequestHandler } from "express";
 import { ZodError } from "zod";
+import { AppError } from "../utils/app-error.js";
 
 export const errorHandler: ErrorRequestHandler = (
     error,
@@ -16,18 +18,18 @@ export const errorHandler: ErrorRequestHandler = (
         return;
     }
 
-    const statusCode =
-        error instanceof Error &&
-            "statusCode" in error &&
-            typeof error.statusCode === "number"
-            ? error.statusCode
-            : 500;
+    if (error instanceof AppError) {
+        res.status(error.statusCode).json({
+            success: false,
+            message: error.message,
+        });
+        return;
+    }
 
-    res.status(statusCode).json({
+    console.error("Unexpected error:", error);
+
+    res.status(500).json({
         success: false,
-        message:
-            statusCode === 500
-                ? "Internal server error"
-                : error.message,
+        message: "Internal server error",
     });
 };

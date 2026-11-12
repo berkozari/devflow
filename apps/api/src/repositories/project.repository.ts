@@ -1,5 +1,6 @@
 
 import { prisma } from "../config/database.js";
+
 import type {
     CreateProjectInput,
     UpdateProjectInput,
@@ -37,11 +38,20 @@ export const projectRepository = {
         });
     },
 
-    async findMany(ownerId: string, query: ProjectQueryInput) {
+    async findMany(userId: string, query: ProjectQueryInput) {
         const { page, limit, search, status } = query;
 
         const where = {
-            ownerId,
+            OR: [
+                { ownerId: userId },
+                {
+                    members: {
+                        some: {
+                            userId,
+                        },
+                    },
+                },
+            ],
             ...(status && { status }),
             ...(search && {
                 name: {
@@ -83,11 +93,20 @@ export const projectRepository = {
         };
     },
 
-    findById(id: string, ownerId: string) {
+    findById(id: string, userId: string) {
         return prisma.project.findFirst({
             where: {
                 id,
-                ownerId,
+                OR: [
+                    { ownerId: userId },
+                    {
+                        members: {
+                            some: {
+                                userId,
+                            },
+                        },
+                    },
+                ],
             },
             include: {
                 owner: {
@@ -118,13 +137,23 @@ export const projectRepository = {
 
     update(
         id: string,
-        ownerId: string,
+        userId: string,
         data: UpdateProjectInput,
     ) {
         return prisma.project.updateMany({
             where: {
                 id,
-                ownerId,
+                OR: [
+                    { ownerId: userId },
+                    {
+                        members: {
+                            some: {
+                                userId,
+                                role: "ADMIN",
+                            },
+                        },
+                    },
+                ],
             },
             data,
         });

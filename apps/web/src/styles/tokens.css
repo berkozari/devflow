@@ -1,0 +1,12 @@
+:root {
+    --font-sans: "Inter Variable", sans-serif;
+    --font-heading: "Inter Variable", sans-serif;
+
+    --radius: 0.625rem;
+
+    --spacing-page-x: 1rem;
+    --spacing-page-y: 1.5rem;
+
+    --sidebar-width: 16rem;
+    --header-height: 4rem;
+}

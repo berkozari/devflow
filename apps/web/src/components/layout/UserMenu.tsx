@@ -1,11 +1,11 @@
 
-import { LogOut, Settings, User } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { LogOut, User, Settings } from "lucide-react";
 
-import {
-    Avatar,
-    AvatarFallback,
-} from "@/components/ui/avatar";
+import { useAuthStore } from "@/stores";
+import { useLogout } from "@/features/auth/hooks/useLogout";
 
+import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -16,20 +16,33 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export function UserMenu() {
+    const navigate = useNavigate();
+
+    const user = useAuthStore((state) => state.user);
+
+    const logout = useLogout();
+
+    async function handleLogout() {
+        try {
+            await logout.mutateAsync();
+        } finally {
+            navigate("/login", {
+                replace: true,
+            });
+        }
+    }
+
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <button
-                    type="button"
-                    className="flex items-center gap-2 rounded-full outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label="Open user menu"
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-full"
+                    aria-label="User menu"
                 >
-                    <Avatar className="size-9">
-                        <AvatarFallback>
-                            JD
-                        </AvatarFallback>
-                    </Avatar>
-                </button>
+                    <User className="size-5" />
+                </Button>
             </DropdownMenuTrigger>
 
             <DropdownMenuContent
@@ -37,34 +50,45 @@ export function UserMenu() {
                 className="w-56"
             >
                 <DropdownMenuLabel>
-                    <div className="flex flex-col">
-                        <span className="text-sm font-medium">
-                            John Doe
+                    <div className="flex flex-col gap-1">
+                        <span className="font-medium">
+                            {user?.name ?? "User"}
                         </span>
 
-                        <span className="text-xs text-muted-foreground">
-                            john@example.com
+                        <span className="text-xs font-normal text-muted-foreground">
+                            {user?.email ?? ""}
                         </span>
                     </div>
                 </DropdownMenuLabel>
 
                 <DropdownMenuSeparator />
 
-                <DropdownMenuItem>
+                <DropdownMenuItem
+                    onClick={() => navigate("/profile")}
+                >
                     <User className="mr-2 size-4" />
                     Profile
                 </DropdownMenuItem>
 
-                <DropdownMenuItem>
+                <DropdownMenuItem
+                    onClick={() => navigate("/settings")}
+                >
                     <Settings className="mr-2 size-4" />
                     Settings
                 </DropdownMenuItem>
 
                 <DropdownMenuSeparator />
 
-                <DropdownMenuItem className="text-destructive focus:text-destructive">
+                <DropdownMenuItem
+                    onClick={handleLogout}
+                    disabled={logout.isPending}
+                    className="text-destructive focus:text-destructive"
+                >
                     <LogOut className="mr-2 size-4" />
-                    Logout
+
+                    {logout.isPending
+                        ? "Signing out..."
+                        : "Logout"}
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

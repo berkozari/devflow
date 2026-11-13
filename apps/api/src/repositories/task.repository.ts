@@ -1,6 +1,8 @@
 
 import { prisma } from "../config/database.js";
 
+import type { Prisma } from "../generated/prisma/client.js";
+
 import type {
     CreateTaskInput,
     UpdateTaskInput,
@@ -12,8 +14,11 @@ export const taskRepository = {
         projectId: string,
         creatorId: string,
         data: CreateTaskInput,
+        tx?: Prisma.TransactionClient,
     ) {
-        return prisma.task.create({
+        const db = tx ?? prisma;
+
+        return db.task.create({
             data: {
                 title: data.title,
                 description: data.description,
@@ -151,8 +156,11 @@ export const taskRepository = {
         projectId: string,
         taskId: string,
         data: UpdateTaskInput,
+        tx?: Prisma.TransactionClient,
     ) {
-        return prisma.task.updateMany({
+        const db = tx ?? prisma;
+
+        return db.task.updateMany({
             where: {
                 id: taskId,
                 projectId,
@@ -170,8 +178,14 @@ export const taskRepository = {
         });
     },
 
-    delete(projectId: string, taskId: string) {
-        return prisma.task.deleteMany({
+    delete(
+        projectId: string,
+        taskId: string,
+        tx?: Prisma.TransactionClient,
+    ) {
+        const db = tx ?? prisma;
+
+        return db.task.deleteMany({
             where: {
                 id: taskId,
                 projectId,

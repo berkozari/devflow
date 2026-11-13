@@ -26,7 +26,7 @@ export type AggregateActivityLog = {
 
 export type ActivityLogMinAggregateOutputType = {
   id: string | null
-  action: string | null
+  action: $Enums.ActivityAction | null
   projectId: string | null
   actorId: string | null
   taskId: string | null
@@ -35,7 +35,7 @@ export type ActivityLogMinAggregateOutputType = {
 
 export type ActivityLogMaxAggregateOutputType = {
   id: string | null
-  action: string | null
+  action: $Enums.ActivityAction | null
   projectId: string | null
   actorId: string | null
   taskId: string | null
@@ -157,7 +157,7 @@ export type ActivityLogGroupByArgs<ExtArgs extends runtime.Types.Extensions.Inte
 
 export type ActivityLogGroupByOutputType = {
   id: string
-  action: string
+  action: $Enums.ActivityAction
   metadata: runtime.JsonValue | null
   projectId: string
   actorId: string | null
@@ -188,7 +188,7 @@ export type ActivityLogWhereInput = {
   OR?: Prisma.ActivityLogWhereInput[]
   NOT?: Prisma.ActivityLogWhereInput | Prisma.ActivityLogWhereInput[]
   id?: Prisma.UuidFilter<"ActivityLog"> | string
-  action?: Prisma.StringFilter<"ActivityLog"> | string
+  action?: Prisma.EnumActivityActionFilter<"ActivityLog"> | $Enums.ActivityAction
   metadata?: Prisma.JsonNullableFilter<"ActivityLog">
   projectId?: Prisma.UuidFilter<"ActivityLog"> | string
   actorId?: Prisma.UuidNullableFilter<"ActivityLog"> | string | null
@@ -217,7 +217,7 @@ export type ActivityLogWhereUniqueInput = Prisma.AtLeast<{
   AND?: Prisma.ActivityLogWhereInput | Prisma.ActivityLogWhereInput[]
   OR?: Prisma.ActivityLogWhereInput[]
   NOT?: Prisma.ActivityLogWhereInput | Prisma.ActivityLogWhereInput[]
-  action?: Prisma.StringFilter<"ActivityLog"> | string
+  action?: Prisma.EnumActivityActionFilter<"ActivityLog"> | $Enums.ActivityAction
   metadata?: Prisma.JsonNullableFilter<"ActivityLog">
   projectId?: Prisma.UuidFilter<"ActivityLog"> | string
   actorId?: Prisma.UuidNullableFilter<"ActivityLog"> | string | null
@@ -246,7 +246,7 @@ export type ActivityLogScalarWhereWithAggregatesInput = {
   OR?: Prisma.ActivityLogScalarWhereWithAggregatesInput[]
   NOT?: Prisma.ActivityLogScalarWhereWithAggregatesInput | Prisma.ActivityLogScalarWhereWithAggregatesInput[]
   id?: Prisma.UuidWithAggregatesFilter<"ActivityLog"> | string
-  action?: Prisma.StringWithAggregatesFilter<"ActivityLog"> | string
+  action?: Prisma.EnumActivityActionWithAggregatesFilter<"ActivityLog"> | $Enums.ActivityAction
   metadata?: Prisma.JsonNullableWithAggregatesFilter<"ActivityLog">
   projectId?: Prisma.UuidWithAggregatesFilter<"ActivityLog"> | string
   actorId?: Prisma.UuidNullableWithAggregatesFilter<"ActivityLog"> | string | null
@@ -256,7 +256,7 @@ export type ActivityLogScalarWhereWithAggregatesInput = {
 
 export type ActivityLogCreateInput = {
   id?: string
-  action: string
+  action: $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   project: Prisma.ProjectCreateNestedOneWithoutActivitiesInput
@@ -266,7 +266,7 @@ export type ActivityLogCreateInput = {
 
 export type ActivityLogUncheckedCreateInput = {
   id?: string
-  action: string
+  action: $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   projectId: string
   actorId?: string | null
@@ -276,7 +276,7 @@ export type ActivityLogUncheckedCreateInput = {
 
 export type ActivityLogUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  action?: Prisma.StringFieldUpdateOperationsInput | string
+  action?: Prisma.EnumActivityActionFieldUpdateOperationsInput | $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneRequiredWithoutActivitiesNestedInput
@@ -286,7 +286,7 @@ export type ActivityLogUpdateInput = {
 
 export type ActivityLogUncheckedUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  action?: Prisma.StringFieldUpdateOperationsInput | string
+  action?: Prisma.EnumActivityActionFieldUpdateOperationsInput | $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   projectId?: Prisma.StringFieldUpdateOperationsInput | string
   actorId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -296,7 +296,7 @@ export type ActivityLogUncheckedUpdateInput = {
 
 export type ActivityLogCreateManyInput = {
   id?: string
-  action: string
+  action: $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   projectId: string
   actorId?: string | null
@@ -306,14 +306,14 @@ export type ActivityLogCreateManyInput = {
 
 export type ActivityLogUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  action?: Prisma.StringFieldUpdateOperationsInput | string
+  action?: Prisma.EnumActivityActionFieldUpdateOperationsInput | $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type ActivityLogUncheckedUpdateManyInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  action?: Prisma.StringFieldUpdateOperationsInput | string
+  action?: Prisma.EnumActivityActionFieldUpdateOperationsInput | $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   projectId?: Prisma.StringFieldUpdateOperationsInput | string
   actorId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -485,9 +485,13 @@ export type ActivityLogUncheckedUpdateManyWithoutTaskNestedInput = {
   deleteMany?: Prisma.ActivityLogScalarWhereInput | Prisma.ActivityLogScalarWhereInput[]
 }
 
+export type EnumActivityActionFieldUpdateOperationsInput = {
+  set?: $Enums.ActivityAction
+}
+
 export type ActivityLogCreateWithoutActorInput = {
   id?: string
-  action: string
+  action: $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   project: Prisma.ProjectCreateNestedOneWithoutActivitiesInput
@@ -496,7 +500,7 @@ export type ActivityLogCreateWithoutActorInput = {
 
 export type ActivityLogUncheckedCreateWithoutActorInput = {
   id?: string
-  action: string
+  action: $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   projectId: string
   taskId?: string | null
@@ -534,7 +538,7 @@ export type ActivityLogScalarWhereInput = {
   OR?: Prisma.ActivityLogScalarWhereInput[]
   NOT?: Prisma.ActivityLogScalarWhereInput | Prisma.ActivityLogScalarWhereInput[]
   id?: Prisma.UuidFilter<"ActivityLog"> | string
-  action?: Prisma.StringFilter<"ActivityLog"> | string
+  action?: Prisma.EnumActivityActionFilter<"ActivityLog"> | $Enums.ActivityAction
   metadata?: Prisma.JsonNullableFilter<"ActivityLog">
   projectId?: Prisma.UuidFilter<"ActivityLog"> | string
   actorId?: Prisma.UuidNullableFilter<"ActivityLog"> | string | null
@@ -544,7 +548,7 @@ export type ActivityLogScalarWhereInput = {
 
 export type ActivityLogCreateWithoutProjectInput = {
   id?: string
-  action: string
+  action: $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   actor?: Prisma.UserCreateNestedOneWithoutActivitiesInput
@@ -553,7 +557,7 @@ export type ActivityLogCreateWithoutProjectInput = {
 
 export type ActivityLogUncheckedCreateWithoutProjectInput = {
   id?: string
-  action: string
+  action: $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   actorId?: string | null
   taskId?: string | null
@@ -588,7 +592,7 @@ export type ActivityLogUpdateManyWithWhereWithoutProjectInput = {
 
 export type ActivityLogCreateWithoutTaskInput = {
   id?: string
-  action: string
+  action: $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   project: Prisma.ProjectCreateNestedOneWithoutActivitiesInput
@@ -597,7 +601,7 @@ export type ActivityLogCreateWithoutTaskInput = {
 
 export type ActivityLogUncheckedCreateWithoutTaskInput = {
   id?: string
-  action: string
+  action: $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   projectId: string
   actorId?: string | null
@@ -632,7 +636,7 @@ export type ActivityLogUpdateManyWithWhereWithoutTaskInput = {
 
 export type ActivityLogCreateManyActorInput = {
   id?: string
-  action: string
+  action: $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   projectId: string
   taskId?: string | null
@@ -641,7 +645,7 @@ export type ActivityLogCreateManyActorInput = {
 
 export type ActivityLogUpdateWithoutActorInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  action?: Prisma.StringFieldUpdateOperationsInput | string
+  action?: Prisma.EnumActivityActionFieldUpdateOperationsInput | $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneRequiredWithoutActivitiesNestedInput
@@ -650,7 +654,7 @@ export type ActivityLogUpdateWithoutActorInput = {
 
 export type ActivityLogUncheckedUpdateWithoutActorInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  action?: Prisma.StringFieldUpdateOperationsInput | string
+  action?: Prisma.EnumActivityActionFieldUpdateOperationsInput | $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   projectId?: Prisma.StringFieldUpdateOperationsInput | string
   taskId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -659,7 +663,7 @@ export type ActivityLogUncheckedUpdateWithoutActorInput = {
 
 export type ActivityLogUncheckedUpdateManyWithoutActorInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  action?: Prisma.StringFieldUpdateOperationsInput | string
+  action?: Prisma.EnumActivityActionFieldUpdateOperationsInput | $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   projectId?: Prisma.StringFieldUpdateOperationsInput | string
   taskId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -668,7 +672,7 @@ export type ActivityLogUncheckedUpdateManyWithoutActorInput = {
 
 export type ActivityLogCreateManyProjectInput = {
   id?: string
-  action: string
+  action: $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   actorId?: string | null
   taskId?: string | null
@@ -677,7 +681,7 @@ export type ActivityLogCreateManyProjectInput = {
 
 export type ActivityLogUpdateWithoutProjectInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  action?: Prisma.StringFieldUpdateOperationsInput | string
+  action?: Prisma.EnumActivityActionFieldUpdateOperationsInput | $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   actor?: Prisma.UserUpdateOneWithoutActivitiesNestedInput
@@ -686,7 +690,7 @@ export type ActivityLogUpdateWithoutProjectInput = {
 
 export type ActivityLogUncheckedUpdateWithoutProjectInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  action?: Prisma.StringFieldUpdateOperationsInput | string
+  action?: Prisma.EnumActivityActionFieldUpdateOperationsInput | $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   actorId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   taskId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -695,7 +699,7 @@ export type ActivityLogUncheckedUpdateWithoutProjectInput = {
 
 export type ActivityLogUncheckedUpdateManyWithoutProjectInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  action?: Prisma.StringFieldUpdateOperationsInput | string
+  action?: Prisma.EnumActivityActionFieldUpdateOperationsInput | $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   actorId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   taskId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -704,7 +708,7 @@ export type ActivityLogUncheckedUpdateManyWithoutProjectInput = {
 
 export type ActivityLogCreateManyTaskInput = {
   id?: string
-  action: string
+  action: $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   projectId: string
   actorId?: string | null
@@ -713,7 +717,7 @@ export type ActivityLogCreateManyTaskInput = {
 
 export type ActivityLogUpdateWithoutTaskInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  action?: Prisma.StringFieldUpdateOperationsInput | string
+  action?: Prisma.EnumActivityActionFieldUpdateOperationsInput | $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneRequiredWithoutActivitiesNestedInput
@@ -722,7 +726,7 @@ export type ActivityLogUpdateWithoutTaskInput = {
 
 export type ActivityLogUncheckedUpdateWithoutTaskInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  action?: Prisma.StringFieldUpdateOperationsInput | string
+  action?: Prisma.EnumActivityActionFieldUpdateOperationsInput | $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   projectId?: Prisma.StringFieldUpdateOperationsInput | string
   actorId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -731,7 +735,7 @@ export type ActivityLogUncheckedUpdateWithoutTaskInput = {
 
 export type ActivityLogUncheckedUpdateManyWithoutTaskInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  action?: Prisma.StringFieldUpdateOperationsInput | string
+  action?: Prisma.EnumActivityActionFieldUpdateOperationsInput | $Enums.ActivityAction
   metadata?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   projectId?: Prisma.StringFieldUpdateOperationsInput | string
   actorId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -815,7 +819,7 @@ export type $ActivityLogPayload<ExtArgs extends runtime.Types.Extensions.Interna
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
-    action: string
+    action: $Enums.ActivityAction
     metadata: runtime.JsonValue | null
     projectId: string
     actorId: string | null
@@ -1248,7 +1252,7 @@ export interface Prisma__ActivityLogClient<T, Null = never, ExtArgs extends runt
  */
 export interface ActivityLogFieldRefs {
   readonly id: Prisma.FieldRef<"ActivityLog", 'String'>
-  readonly action: Prisma.FieldRef<"ActivityLog", 'String'>
+  readonly action: Prisma.FieldRef<"ActivityLog", 'ActivityAction'>
   readonly metadata: Prisma.FieldRef<"ActivityLog", 'Json'>
   readonly projectId: Prisma.FieldRef<"ActivityLog", 'String'>
   readonly actorId: Prisma.FieldRef<"ActivityLog", 'String'>

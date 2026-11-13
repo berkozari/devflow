@@ -69,8 +69,7 @@ export function validate(
             if (!result.success) {
                 errors.push(
                     ...result.error.issues.map(
-                        (issue) =>
-                            `${source.key}.${issue.path.join(".")}: ${issue.message}`,
+                        (issue) => issue.message,
                     ),
                 );
 
@@ -86,10 +85,12 @@ export function validate(
             );
         }
 
+        // Initialize locals for Express response mocks.
+        res.locals ??= {};
+
         res.locals.validated = validated;
 
-        // Backward compatibility:
-        // Existing controllers can continue using req.body.
+        // Preserve backward compatibility.
         if (validated.body !== undefined) {
             req.body = validated.body;
         }

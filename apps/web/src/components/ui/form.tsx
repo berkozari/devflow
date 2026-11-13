@@ -3,8 +3,6 @@ import * as React from "react";
 import {
     Controller,
     FormProvider,
-    useFormContext,
-    useFormState,
     type ControllerProps,
     type FieldPath,
     type FieldValues,
@@ -13,22 +11,13 @@ import {
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 
-import { Slot } from "radix-ui";
+import {
+    FormFieldContext,
+    FormItemContext,
+    useFormField,
+} from "./use-form-field";
 
 const Form = FormProvider;
-
-type FormFieldContextValue<
-    TFieldValues extends FieldValues,
-    TName extends FieldPath<TFieldValues>,
-> = {
-    name: TName;
-};
-
-const FormFieldContext =
-    React.createContext<FormFieldContextValue<
-        FieldValues,
-        FieldPath<FieldValues>
-    > | null>(null);
 
 function FormField<
     TFieldValues extends FieldValues,
@@ -44,43 +33,6 @@ function FormField<
         </FormFieldContext.Provider>
     );
 }
-
-function useFormField() {
-    const fieldContext = React.useContext(FormFieldContext);
-    const itemContext = React.useContext(FormItemContext);
-
-    const { getFieldState } = useFormContext();
-    const formState = useFormState({
-        name: fieldContext?.name,
-    });
-
-    if (!fieldContext || !itemContext) {
-        throw new Error(
-            "useFormField must be used within FormField and FormItem",
-        );
-    }
-
-    const fieldState = getFieldState(
-        fieldContext.name,
-        formState,
-    );
-
-    return {
-        id: itemContext.id,
-        name: fieldContext.name,
-        formItemId: `${itemContext.id}-form-item`,
-        formDescriptionId: `${itemContext.id}-form-item-description`,
-        formMessageId: `${itemContext.id}-form-item-message`,
-        ...fieldState,
-    };
-}
-
-type FormItemContextValue = {
-    id: string;
-};
-
-const FormItemContext =
-    React.createContext<FormItemContextValue | null>(null);
 
 function FormItem({
     className,
@@ -118,7 +70,7 @@ function FormLabel({
 
 function FormControl({
     ...props
-}: React.ComponentProps<typeof Slot.Root>) {
+}: React.ComponentProps<"div">) {
     const {
         error,
         formItemId,
@@ -126,14 +78,14 @@ function FormControl({
         formMessageId,
     } = useFormField();
 
-    const describedBy = error
-        ? `${formDescriptionId} ${formMessageId}`
-        : formDescriptionId;
-
     return (
-        <Slot.Root
+        <div
             id={formItemId}
-            aria-describedby={describedBy}
+            aria-describedby={
+                error
+                    ? `${formDescriptionId} ${formMessageId}`
+                    : formDescriptionId
+            }
             aria-invalid={!!error}
             {...props}
         />
@@ -168,7 +120,9 @@ function FormMessage({
         ? String(error.message ?? "")
         : props.children;
 
-    if (!body) return null;
+    if (!body) {
+        return null;
+    }
 
     return (
         <p
@@ -193,5 +147,4 @@ export {
     FormControl,
     FormDescription,
     FormMessage,
-    useFormField,
 };

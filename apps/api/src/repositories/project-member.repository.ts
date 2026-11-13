@@ -53,6 +53,23 @@ export const projectMemberRepository = {
         });
     },
 
+    findProjectMembersByUserIds(
+        projectId: string,
+        userIds: string[],
+    ) {
+        return prisma.projectMember.findMany({
+            where: {
+                projectId,
+                userId: {
+                    in: userIds,
+                },
+            },
+            select: {
+                userId: true,
+            },
+        });
+    },
+
     create(projectId: string, userId: string, role: ProjectRole) {
         return prisma.projectMember.create({
             data: {

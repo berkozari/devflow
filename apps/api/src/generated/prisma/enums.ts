@@ -55,3 +55,28 @@ export const TaskPriority = {
 } as const
 
 export type TaskPriority = (typeof TaskPriority)[keyof typeof TaskPriority]
+
+
+export const NotificationType = {
+  TASK_ASSIGNED: 'TASK_ASSIGNED',
+  TASK_MENTIONED: 'TASK_MENTIONED',
+  COMMENT_MENTIONED: 'COMMENT_MENTIONED',
+  COMMENT_CREATED: 'COMMENT_CREATED'
+} as const
+
+export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType]
+
+
+export const ActivityAction = {
+  TASK_CREATED: 'TASK_CREATED',
+  TASK_UPDATED: 'TASK_UPDATED',
+  TASK_STATUS_CHANGED: 'TASK_STATUS_CHANGED',
+  TASK_PRIORITY_CHANGED: 'TASK_PRIORITY_CHANGED',
+  TASK_ASSIGNED: 'TASK_ASSIGNED',
+  TASK_DELETED: 'TASK_DELETED',
+  COMMENT_CREATED: 'COMMENT_CREATED',
+  COMMENT_UPDATED: 'COMMENT_UPDATED',
+  COMMENT_DELETED: 'COMMENT_DELETED'
+} as const
+
+export type ActivityAction = (typeof ActivityAction)[keyof typeof ActivityAction]

@@ -1,7 +1,10 @@
+import { prisma } from "../config/database.js";
 
 import { taskRepository } from "../repositories/task.repository.js";
-
+import { activityRepository } from "../repositories/activity.repository.js";
 import { projectMemberRepository } from "../repositories/project-member.repository.js";
+
+import { notificationService } from "./notification.service.js";
 
 import { AppError } from "../utils/app-error.js";
 
@@ -11,7 +14,11 @@ import type {
     TaskQuery,
 } from "../schemas/task.schema.js";
 
-import type { ProjectRole } from "../generated/prisma/client.js";
+import type {
+    ProjectRole,
+    ActivityAction,
+    Prisma,
+} from "../generated/prisma/client.js";
 
 async function getProjectMember(
     projectId: string,
@@ -54,6 +61,19 @@ async function validateAssignee(
     }
 }
 
+async function createActivity(
+    tx: Prisma.TransactionClient,
+    data: {
+        action: ActivityAction;
+        projectId: string;
+        actorId: string;
+        taskId: string;
+        metadata?: Prisma.InputJsonValue;
+    },
+) {
+    return activityRepository.create(tx, data);
+}
+
 export const taskService = {
     async create(
         projectId: string,
@@ -77,11 +97,44 @@ export const taskService = {
             data.assigneeId,
         );
 
-        return taskRepository.create(
-            projectId,
-            userId,
-            data,
-        );
+        return prisma.$transaction(async (tx) => {
+            const task = await taskRepository.create(
+                projectId,
+                userId,
+                data,
+                tx,
+            );
+
+            await createActivity(tx, {
+                action: "TASK_CREATED",
+                projectId,
+                actorId: userId,
+                taskId: task.id,
+                metadata: {
+                    title: task.title,
+                    status: task.status,
+                    priority: task.priority,
+                    assigneeId: task.assigneeId,
+                },
+            });
+
+            if (
+                task.assigneeId &&
+                task.assigneeId !== userId
+            ) {
+                await notificationService.create(tx, {
+                    type: "TASK_ASSIGNED",
+                    title: "New task assigned",
+                    message: `You have been assigned to "${task.title}"`,
+                    userId: task.assigneeId,
+                    actorId: userId,
+                    projectId,
+                    taskId: task.id,
+                });
+            }
+
+            return task;
+        });
     },
 
     async findMany(
@@ -158,7 +211,8 @@ export const taskService = {
         }
 
         const changesAssignment =
-            data.assigneeId !== undefined;
+            data.assigneeId !== undefined &&
+            data.assigneeId !== task.assigneeId;
 
         const changesOwnershipFields =
             data.title !== undefined ||
@@ -166,7 +220,9 @@ export const taskService = {
             data.priority !== undefined ||
             data.dueDate !== undefined;
 
-        const changesStatus = data.status !== undefined;
+        const changesStatus =
+            data.status !== undefined &&
+            data.status !== task.status;
 
         if (
             !isManager &&
@@ -183,7 +239,8 @@ export const taskService = {
             !isManager &&
             !isCreator &&
             isAssignee &&
-            changesStatus === false
+            data.status !== undefined &&
+            !changesStatus
         ) {
             throw new AppError(
                 "You are not allowed to modify these task fields",
@@ -196,20 +253,133 @@ export const taskService = {
             data.assigneeId,
         );
 
-        const result = await taskRepository.update(
-            projectId,
-            taskId,
-            data,
-        );
+        const activities: {
+            action: ActivityAction;
+            metadata: Prisma.InputJsonValue;
+        }[] = [];
 
-        if (result.count === 0) {
-            throw new AppError("Task not found", 404);
+        const hasGeneralChanges =
+            data.title !== undefined ||
+            data.description !== undefined ||
+            data.dueDate !== undefined;
+
+        if (hasGeneralChanges) {
+            activities.push({
+                action: "TASK_UPDATED",
+                metadata: {
+                    old: {
+                        title: task.title,
+                        description: task.description,
+                        dueDate: task.dueDate?.toISOString() ?? null,
+                    },
+                    new: {
+                        title: data.title ?? task.title,
+                        description: data.description ?? task.description,
+                        dueDate:
+                            data.dueDate !== undefined
+                                ? data.dueDate
+                                : task.dueDate?.toISOString() ?? null,
+                    },
+                },
+            });
         }
 
-        return taskRepository.findById(
-            projectId,
-            taskId,
-        );
+        if (changesStatus) {
+            activities.push({
+                action: "TASK_STATUS_CHANGED",
+                metadata: {
+                    oldStatus: task.status,
+                    newStatus: data.status!,
+                },
+            });
+        }
+
+        if (
+            data.priority !== undefined &&
+            data.priority !== task.priority
+        ) {
+            activities.push({
+                action: "TASK_PRIORITY_CHANGED",
+                metadata: {
+                    oldPriority: task.priority,
+                    newPriority: data.priority,
+                },
+            });
+        }
+
+        if (changesAssignment) {
+            activities.push({
+                action: "TASK_ASSIGNED",
+                metadata: {
+                    oldAssigneeId: task.assigneeId,
+                    newAssigneeId: data.assigneeId,
+                },
+            });
+        }
+
+        return prisma.$transaction(async (tx) => {
+            const result = await taskRepository.update(
+                projectId,
+                taskId,
+                data,
+                tx,
+            );
+
+            if (result.count === 0) {
+                throw new AppError("Task not found", 404);
+            }
+
+            for (const activity of activities) {
+                await createActivity(tx, {
+                    action: activity.action,
+                    projectId,
+                    actorId: userId,
+                    taskId,
+                    metadata: activity.metadata,
+                });
+            }
+
+            if (
+                changesAssignment &&
+                data.assigneeId &&
+                data.assigneeId !== userId
+            ) {
+                await notificationService.create(tx, {
+                    type: "TASK_ASSIGNED",
+                    title: "New task assigned",
+                    message: `You have been assigned to "${data.title ?? task.title}"`,
+                    userId: data.assigneeId,
+                    actorId: userId,
+                    projectId,
+                    taskId,
+                });
+            }
+
+            const updatedTask = await tx.task.findFirst({
+                where: {
+                    id: taskId,
+                    projectId,
+                },
+                include: {
+                    assignee: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                        },
+                    },
+                    creator: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                        },
+                    },
+                },
+            });
+
+            return updatedTask;
+        });
     },
 
     async delete(
@@ -229,13 +399,37 @@ export const taskService = {
             );
         }
 
-        const result = await taskRepository.delete(
+        const task = await taskRepository.findById(
             projectId,
             taskId,
         );
 
-        if (result.count === 0) {
+        if (!task) {
             throw new AppError("Task not found", 404);
         }
+
+        await prisma.$transaction(async (tx) => {
+            await createActivity(tx, {
+                action: "TASK_DELETED",
+                projectId,
+                actorId: userId,
+                taskId,
+                metadata: {
+                    title: task.title,
+                    status: task.status,
+                    priority: task.priority,
+                },
+            });
+
+            const result = await taskRepository.delete(
+                projectId,
+                taskId,
+                tx,
+            );
+
+            if (result.count === 0) {
+                throw new AppError("Task not found", 404);
+            }
+        });
     },
 };

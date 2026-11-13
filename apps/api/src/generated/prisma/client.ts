@@ -76,3 +76,13 @@ export type Comment = Prisma.CommentModel
  * 
  */
 export type ActivityLog = Prisma.ActivityLogModel
+/**
+ * Model Notification
+ * 
+ */
+export type Notification = Prisma.NotificationModel
+/**
+ * Model Mention
+ * 
+ */
+export type Mention = Prisma.MentionModel

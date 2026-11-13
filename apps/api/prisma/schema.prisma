@@ -40,21 +40,50 @@ enum TaskPriority {
   URGENT
 }
 
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_MENTIONED
+  COMMENT_MENTIONED
+  COMMENT_CREATED
+}
+
+enum ActivityAction {
+  TASK_CREATED
+  TASK_UPDATED
+  TASK_STATUS_CHANGED
+  TASK_PRIORITY_CHANGED
+  TASK_ASSIGNED
+  TASK_DELETED
+
+  COMMENT_CREATED
+  COMMENT_UPDATED
+  COMMENT_DELETED
+}
+
 model User {
-  id            String          @id @default(uuid()) @db.Uuid
-  name          String
-  email         String          @unique
-  passwordHash  String
-  role          Role            @default(USER)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
   refreshTokens RefreshToken[]
+
   ownedProjects Project[]       @relation("ProjectOwner")
   memberships   ProjectMember[]
-  assignedTasks Task[]          @relation("TaskAssignee")
-  createdTasks  Task[]          @relation("TaskCreator")
-  comments      Comment[]
-  activities    ActivityLog[]   @relation("ActivityActor")
+
+  assignedTasks Task[] @relation("TaskAssignee")
+  createdTasks  Task[] @relation("TaskCreator")
+
+  comments   Comment[]
+  activities ActivityLog[] @relation("ActivityActor")
+
+  notificationsReceived Notification[] @relation("NotificationRecipient")
+  notificationsSent     Notification[] @relation("NotificationActor")
+
+  mentionsReceived Mention[] @relation("MentionRecipient")
 }
 
 model RefreshToken {
@@ -151,13 +180,15 @@ model Comment {
   task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   author User @relation(fields: [authorId], references: [id], onDelete: Restrict)
 
+  mentions Mention[]
+
   @@index([taskId, createdAt])
   @@index([authorId])
 }
 
 model ActivityLog {
-  id       String @id @default(uuid()) @db.Uuid
-  action   String
+  id       String         @id @default(uuid()) @db.Uuid
+  action   ActivityAction
   metadata Json?
 
   projectId String  @db.Uuid
@@ -173,4 +204,44 @@ model ActivityLog {
   @@index([projectId, createdAt])
   @@index([actorId])
   @@index([taskId])
+}
+
+model Notification {
+  id String @id @default(uuid()) @db.Uuid
+
+  type    NotificationType
+  title   String
+  message String?
+
+  userId  String  @db.Uuid
+  actorId String? @db.Uuid
+
+  projectId String? @db.Uuid
+  taskId    String? @db.Uuid
+
+  metadata Json?
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+
+  actor User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, readAt, createdAt])
+  @@index([projectId])
+}
+
+model Mention {
+  id        String @id @default(uuid()) @db.Uuid
+  commentId String @db.Uuid
+  userId    String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  user User @relation("MentionRecipient", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
 }

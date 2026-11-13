@@ -57,7 +57,9 @@ export const ModelName = {
   ProjectMember: 'ProjectMember',
   Task: 'Task',
   Comment: 'Comment',
-  ActivityLog: 'ActivityLog'
+  ActivityLog: 'ActivityLog',
+  Notification: 'Notification',
+  Mention: 'Mention'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -165,6 +167,33 @@ export const ActivityLogScalarFieldEnum = {
 } as const
 
 export type ActivityLogScalarFieldEnum = (typeof ActivityLogScalarFieldEnum)[keyof typeof ActivityLogScalarFieldEnum]
+
+
+export const NotificationScalarFieldEnum = {
+  id: 'id',
+  type: 'type',
+  title: 'title',
+  message: 'message',
+  userId: 'userId',
+  actorId: 'actorId',
+  projectId: 'projectId',
+  taskId: 'taskId',
+  metadata: 'metadata',
+  readAt: 'readAt',
+  createdAt: 'createdAt'
+} as const
+
+export type NotificationScalarFieldEnum = (typeof NotificationScalarFieldEnum)[keyof typeof NotificationScalarFieldEnum]
+
+
+export const MentionScalarFieldEnum = {
+  id: 'id',
+  commentId: 'commentId',
+  userId: 'userId',
+  createdAt: 'createdAt'
+} as const
+
+export type MentionScalarFieldEnum = (typeof MentionScalarFieldEnum)[keyof typeof MentionScalarFieldEnum]
 
 
 export const SortOrder = {

@@ -5,6 +5,9 @@ import adminRouter from "./admin.routes.js";
 import projectRouter from "./project.routes.js";
 import projectMemberRouter from "./project-member.routes.js";
 import taskRouter from "./task.routes.js";
+import commentRouter from "./comment.routes.js";
+import activityRoutes from "./activity.routes.js";
+import notificationRoutes from "./notification.routes.js";
 
 const router = Router();
 
@@ -21,5 +24,8 @@ router.use("/admin", adminRouter);
 router.use("/projects", projectRouter);
 router.use("/projects", projectMemberRouter);
 router.use("/projects/:projectId/tasks", taskRouter);
+router.use("/projects/:projectId/tasks/:taskId/comments", commentRouter);
+router.use("/projects/:projectId/activities", activityRoutes);
+router.use("/notifications", notificationRoutes);
 
 export default router;

@@ -26,7 +26,6 @@ export function canEditTask(
 }
 
 export function canEditTaskFields(
-    task: Task,
     context: TaskPermissionContext,
 ): boolean {
     return canManageTasks(context.role);

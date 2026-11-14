@@ -171,6 +171,38 @@ export const taskRepository = {
                 status: true,
                 position: true,
                 assigneeId: true,
+                completedAt: true,
+            },
+        });
+    },
+
+    findUpdatedById(
+        projectId: string,
+        taskId: string,
+        tx?: Prisma.TransactionClient,
+    ) {
+        const db = tx ?? prisma;
+
+        return db.task.findFirst({
+            where: {
+                id: taskId,
+                projectId,
+            },
+            include: {
+                assignee: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                    },
+                },
+                creator: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                    },
+                },
             },
         });
     },
@@ -223,6 +255,7 @@ export const taskRepository = {
         taskId: string,
         data: UpdateTaskInput,
         tx?: Prisma.TransactionClient,
+        completedAt?: Date | null,
     ) {
         const db = tx ?? prisma;
 
@@ -233,6 +266,10 @@ export const taskRepository = {
             },
             data: {
                 ...data,
+
+                ...(completedAt !== undefined && {
+                    completedAt,
+                }),
 
                 dueDate:
                     data.dueDate !== undefined

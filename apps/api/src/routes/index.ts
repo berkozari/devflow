@@ -8,6 +8,7 @@ import taskRouter from "./task.routes.js";
 import commentRouter from "./comment.routes.js";
 import activityRoutes from "./activity.routes.js";
 import notificationRoutes from "./notification.routes.js";
+import dashboardRoutes from "./dashboard.routes.js";
 
 const router = Router();
 
@@ -27,5 +28,6 @@ router.use("/projects/:projectId/tasks", taskRouter);
 router.use("/projects/:projectId/tasks/:taskId/comments", commentRouter);
 router.use("/projects/:projectId/activities", activityRoutes);
 router.use("/notifications", notificationRoutes);
+router.use("/dashboard", dashboardRoutes);
 
 export default router;

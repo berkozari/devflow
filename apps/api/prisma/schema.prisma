@@ -151,15 +151,21 @@ model Task {
   assigneeId String? @db.Uuid
   creatorId  String  @db.Uuid
 
-  dueDate DateTime?
+  dueDate     DateTime?
+  completedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignee User?   @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  creator  User    @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  // Project relation
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  // User relations
+  assignee User? @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  creator User @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+
+  // Other relations
   comments   Comment[]
   activities ActivityLog[]
 
@@ -167,6 +173,8 @@ model Task {
   @@index([assigneeId])
   @@index([creatorId])
   @@index([dueDate])
+  @@index([projectId, createdAt])
+  @@index([projectId, completedAt])
 }
 
 model Comment {

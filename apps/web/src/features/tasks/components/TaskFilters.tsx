@@ -45,10 +45,14 @@ export function TaskFilters({
         filters.search ?? "",
     );
 
-    // Keep local search synchronized with external filter changes.
-    useEffect(() => {
+    const [previousExternalSearch, setPreviousExternalSearch] =
+        useState(filters.search);
+
+    // Synchronize local search when external filters change.
+    if (filters.search !== previousExternalSearch) {
+        setPreviousExternalSearch(filters.search);
         setSearch(filters.search ?? "");
-    }, [filters.search]);
+    }
 
     // Debounce search requests.
     useEffect(() => {

@@ -18,6 +18,7 @@ interface TaskCardProps {
     overlay?: boolean;
     canDrag?: boolean;
     onClick?: (task: Task) => void;
+    now?: number;
 }
 
 const priorityConfig: Record<
@@ -55,6 +56,7 @@ export function TaskCard({
     overlay = false,
     canDrag = false,
     onClick,
+    now,
 }: TaskCardProps) {
     const {
         attributes,
@@ -79,7 +81,8 @@ export function TaskCard({
 
     const isOverdue =
         task.dueDate !== null &&
-        new Date(task.dueDate).getTime() < Date.now();
+        now !== undefined &&
+        new Date(task.dueDate).getTime() < now;
 
     const style = transform
         ? {
@@ -97,10 +100,9 @@ export function TaskCard({
                 }
             }}
             className={`transition-shadow hover:shadow-md ${canDrag && !overlay
-                    ? "cursor-default"
-                    : "cursor-pointer"
-                } ${isDragging ? "opacity-30" : ""
-                } ${overlay ? "rotate-1 shadow-xl" : ""
+                ? "cursor-default"
+                : "cursor-pointer"
+                } ${isDragging ? "opacity-30" : ""} ${overlay ? "rotate-1 shadow-xl" : ""
                 }`}
         >
             <CardContent className="space-y-3 p-4">
@@ -160,8 +162,8 @@ export function TaskCard({
                     {task.dueDate && (
                         <div
                             className={`flex shrink-0 items-center gap-1 text-xs ${isOverdue
-                                    ? "text-destructive"
-                                    : "text-muted-foreground"
+                                ? "text-destructive"
+                                : "text-muted-foreground"
                                 }`}
                         >
                             <CalendarDays className="size-3" />

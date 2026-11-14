@@ -135,10 +135,6 @@ export function ProjectDetailPage() {
         userId: user.id,
     };
 
-    const canManageTasks =
-        currentUserRole === "OWNER" ||
-        currentUserRole === "ADMIN";
-
     // OWNER, ADMIN ve MEMBER task oluşturabilir.
     const canAddTask = true;
 
@@ -154,7 +150,7 @@ export function ProjectDetailPage() {
         : false;
 
     const canEditSelectedTaskFields = editingTask
-        ? canEditTaskFields(editingTask, permissionContext)
+        ? canEditTaskFields(permissionContext)
         : true;
 
     const canDeleteSelectedTask =
@@ -183,7 +179,7 @@ export function ProjectDetailPage() {
             }
 
             const updatePayload: UpdateTaskPayload =
-                canEditTaskFields(editingTask, permissionContext)
+                canEditTaskFields(permissionContext)
                     ? payload as UpdateTaskPayload
                     : {
                         status: (payload as UpdateTaskPayload).status,

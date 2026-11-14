@@ -20,6 +20,7 @@ import type {
     ProjectRole,
     ActivityAction,
     Prisma,
+    TaskStatus,
 } from "../generated/prisma/client.js";
 
 async function getProjectMember(
@@ -90,6 +91,22 @@ function canMoveTask(
     }
 
     return false;
+}
+
+function getCompletedAt(
+    currentStatus: TaskStatus,
+    nextStatus: TaskStatus,
+    currentCompletedAt: Date | null,
+): Date | null {
+    if (nextStatus !== "DONE") {
+        return null;
+    }
+
+    if (currentStatus === "DONE") {
+        return currentCompletedAt;
+    }
+
+    return new Date();
 }
 
 export const taskService = {
@@ -325,11 +342,20 @@ export const taskService = {
         }
 
         return prisma.$transaction(async (tx) => {
+            const completedAt = changesStatus
+                ? getCompletedAt(
+                    task.status,
+                    data.status!,
+                    task.completedAt,
+                )
+                : undefined;
+
             const result = await taskRepository.update(
                 projectId,
                 taskId,
                 data,
                 tx,
+                completedAt
             );
 
             if (result.count === 0) {
@@ -362,28 +388,11 @@ export const taskService = {
                 });
             }
 
-            const updatedTask = await tx.task.findFirst({
-                where: {
-                    id: taskId,
-                    projectId,
-                },
-                include: {
-                    assignee: {
-                        select: {
-                            id: true,
-                            name: true,
-                            email: true,
-                        },
-                    },
-                    creator: {
-                        select: {
-                            id: true,
-                            name: true,
-                            email: true,
-                        },
-                    },
-                },
-            });
+            const updatedTask = await taskRepository.findUpdatedById(
+                projectId,
+                taskId,
+                tx,
+            );
 
             return updatedTask;
         });
@@ -424,6 +433,12 @@ export const taskService = {
 
             const sourceStatus = task.status;
             const targetStatus = data.status;
+
+            const completedAt = getCompletedAt(
+                sourceStatus,
+                targetStatus,
+                task.completedAt,
+            );
 
             const sourceTasks = await taskRepository.findByStatus(
                 projectId,
@@ -506,10 +521,15 @@ export const taskService = {
                 ) {
                     await tx.task.update({
                         where: {
-                            id: sourceWithoutTask[index].id,
+                            id: newTargetTasks[index].id,
                         },
                         data: {
+                            status: targetStatus,
                             position: index,
+
+                            ...(newTargetTasks[index].id === taskId && {
+                                completedAt,
+                            }),
                         },
                     });
                 }
@@ -532,41 +552,26 @@ export const taskService = {
                 });
             }
 
-            await createActivity(tx, {
-                action: "TASK_STATUS_CHANGED",
-                projectId,
-                actorId: userId,
-                taskId,
-                metadata: {
-                    oldStatus: sourceStatus,
-                    newStatus: targetStatus,
-                    oldPosition: task.position,
-                    newPosition: insertIndex,
-                },
-            });
-
-            const updatedTask = await tx.task.findFirst({
-                where: {
-                    id: taskId,
+            if (sourceStatus !== targetStatus) {
+                await createActivity(tx, {
+                    action: "TASK_STATUS_CHANGED",
                     projectId,
-                },
-                include: {
-                    assignee: {
-                        select: {
-                            id: true,
-                            name: true,
-                            email: true,
-                        },
+                    actorId: userId,
+                    taskId,
+                    metadata: {
+                        oldStatus: sourceStatus,
+                        newStatus: targetStatus,
+                        oldPosition: task.position,
+                        newPosition: insertIndex,
                     },
-                    creator: {
-                        select: {
-                            id: true,
-                            name: true,
-                            email: true,
-                        },
-                    },
-                },
-            });
+                });
+            }
+
+            const updatedTask = await taskRepository.findUpdatedById(
+                projectId,
+                taskId,
+                tx,
+            );
 
             if (!updatedTask) {
                 throw new AppError("Task not found", 404);
@@ -575,7 +580,6 @@ export const taskService = {
             return updatedTask;
         });
     },
-
 
     async delete(
         projectId: string,

@@ -1,7 +1,7 @@
 
 import { prisma } from "../config/database.js";
 
-import type { Prisma } from "../generated/prisma/client.js";
+import type { Prisma, TaskStatus } from "../generated/prisma/client.js";
 
 import type {
     CreateTaskInput,
@@ -14,6 +14,7 @@ export const taskRepository = {
         projectId: string,
         creatorId: string,
         data: CreateTaskInput,
+        position: number,
         tx?: Prisma.TransactionClient,
     ) {
         const db = tx ?? prisma;
@@ -28,6 +29,7 @@ export const taskRepository = {
                 dueDate: data.dueDate
                     ? new Date(data.dueDate)
                     : data.dueDate,
+                position,
                 projectId,
                 creatorId,
             },
@@ -150,6 +152,70 @@ export const taskRepository = {
             tasks,
             total,
         };
+    },
+
+    findPositionById(
+        projectId: string,
+        taskId: string,
+        tx?: Prisma.TransactionClient,
+    ) {
+        const db = tx ?? prisma;
+
+        return db.task.findFirst({
+            where: {
+                id: taskId,
+                projectId,
+            },
+            select: {
+                id: true,
+                status: true,
+                position: true,
+                assigneeId: true,
+            },
+        });
+    },
+
+    findByStatus(
+        projectId: string,
+        status: TaskStatus,
+        tx?: Prisma.TransactionClient,
+    ) {
+        const db = tx ?? prisma;
+
+        return db.task.findMany({
+            where: {
+                projectId,
+                status,
+            },
+            orderBy: {
+                position: "asc",
+            },
+            select: {
+                id: true,
+                position: true,
+            },
+        });
+    },
+
+    getLastPosition(
+        projectId: string,
+        status: TaskStatus,
+        tx?: Prisma.TransactionClient,
+    ) {
+        const db = tx ?? prisma;
+
+        return db.task.findFirst({
+            where: {
+                projectId,
+                status,
+            },
+            orderBy: {
+                position: "desc",
+            },
+            select: {
+                position: true,
+            },
+        });
     },
 
     update(

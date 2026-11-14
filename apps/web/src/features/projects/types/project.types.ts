@@ -3,6 +3,10 @@ import type {
     CreateProjectFormValues,
 } from "../schemas/project.schema";
 
+import type {
+    ProjectMember,
+} from "./project-member.types";
+
 export type ProjectStatus =
     | "PLANNING"
     | "ACTIVE"
@@ -15,17 +19,7 @@ export interface ProjectOwner {
     email?: string;
 }
 
-export interface ProjectMemberUser {
-    id: string;
-    name: string;
-    email: string;
-}
-
-export interface ProjectMember {
-    user: ProjectMemberUser;
-    // Diğer alanları ProjectMember Prisma modelini
-    // gördükten sonra ekleyeceğiz.
-}
+export type { ProjectMember };
 
 export interface ProjectCounts {
     members?: number;

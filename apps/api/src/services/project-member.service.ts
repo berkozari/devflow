@@ -42,6 +42,13 @@ async function getActorRole(
         throwHttpError(404, "Project not found");
     }
 
+    if (membership.role === "OWNER") {
+        throwHttpError(
+            403,
+            "Invalid project membership role",
+        );
+    }
+
     return membership.role;
 }
 

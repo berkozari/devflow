@@ -22,5 +22,6 @@ export const env = {
     refreshTokenExpiresInDays: Number(
         process.env.REFRESH_TOKEN_EXPIRES_IN_DAYS ?? 7,
     ),
-    clientUrl: process.env.CLIENT_URL
+    clientUrl1: process.env.CLIENT_URL1,
+    clientUrl2: process.env.CLIENT_URL2
 } as const;

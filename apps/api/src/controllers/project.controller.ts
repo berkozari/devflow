@@ -6,6 +6,9 @@ import {
     updateProjectSchema,
     projectParamsSchema,
     projectQuerySchema,
+    addProjectMemberSchema,
+    updateProjectMemberSchema,
+    projectMemberParamsSchema,
 } from "../schemas/project.schema.js";
 
 import { AppError } from "../utils/app-error.js";
@@ -151,6 +154,137 @@ export const deleteProject: RequestHandler = async (req, res, next) => {
         res.status(200).json({
             success: true,
             message: "Project deleted successfully",
+        });
+    } catch (error) {
+        handleError(error, next);
+    }
+};
+
+export const getProjectMembers: RequestHandler = async (
+    req,
+    res,
+    next,
+) => {
+    try {
+        if (!req.user) {
+            res.status(401).json({
+                success: false,
+                message: "Authentication required",
+            });
+            return;
+        }
+
+        const { id } = projectParamsSchema.parse(req.params);
+
+        const members = await projectService.getMembers(
+            id,
+            req.user.id,
+        );
+
+        res.status(200).json({
+            success: true,
+            data: members,
+        });
+    } catch (error) {
+        handleError(error, next);
+    }
+};
+
+export const addProjectMember: RequestHandler = async (
+    req,
+    res,
+    next,
+) => {
+    try {
+        if (!req.user) {
+            res.status(401).json({
+                success: false,
+                message: "Authentication required",
+            });
+            return;
+        }
+
+        const { id } = projectParamsSchema.parse(req.params);
+        const data = addProjectMemberSchema.parse(req.body);
+
+        const member = await projectService.addMember(
+            id,
+            req.user.id,
+            data,
+        );
+
+        res.status(201).json({
+            success: true,
+            message: "Project member added successfully",
+            data: member,
+        });
+    } catch (error) {
+        handleError(error, next);
+    }
+};
+
+export const updateProjectMemberRole: RequestHandler = async (
+    req,
+    res,
+    next,
+) => {
+    try {
+        if (!req.user) {
+            res.status(401).json({
+                success: false,
+                message: "Authentication required",
+            });
+            return;
+        }
+
+        const { id, userId } =
+            projectMemberParamsSchema.parse(req.params);
+
+        const data = updateProjectMemberSchema.parse(req.body);
+
+        const member = await projectService.updateMemberRole(
+            id,
+            req.user.id,
+            userId,
+            data,
+        );
+
+        res.status(200).json({
+            success: true,
+            message: "Member role updated successfully",
+            data: member,
+        });
+    } catch (error) {
+        handleError(error, next);
+    }
+};
+
+export const removeProjectMember: RequestHandler = async (
+    req,
+    res,
+    next,
+) => {
+    try {
+        if (!req.user) {
+            res.status(401).json({
+                success: false,
+                message: "Authentication required",
+            });
+            return;
+        }
+
+        const { id, userId } =
+            projectMemberParamsSchema.parse(req.params);
+
+        await projectService.removeMember(
+            id,
+            req.user.id,
+            userId,
+        );
+
+        res.status(200).json({
+            success: true,
+            message: "Project member removed successfully",
         });
     } catch (error) {
         handleError(error, next);

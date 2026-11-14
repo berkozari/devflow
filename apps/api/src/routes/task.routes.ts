@@ -10,6 +10,7 @@ import {
     getTaskById,
     updateTask,
     deleteTask,
+    moveTask,
 } from "../controllers/task.controller.js";
 
 import {
@@ -18,6 +19,7 @@ import {
     taskParamsSchema,
     taskProjectParamsSchema,
     taskQuerySchema,
+    moveTaskSchema,
 } from "../schemas/task.schema.js";
 
 const router = Router({ mergeParams: true });
@@ -58,6 +60,17 @@ router.patch(
     }),
     updateTask,
 );
+
+
+router.patch(
+    "/:taskId/move",
+    validate({
+        params: taskParamsSchema,
+        body: moveTaskSchema,
+    }),
+    moveTask,
+);
+
 
 router.delete(
     "/:taskId",

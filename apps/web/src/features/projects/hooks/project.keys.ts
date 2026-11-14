@@ -13,4 +13,16 @@ export const projectKeys = {
 
     detail: (id: string) =>
         [...projectKeys.details(), id] as const,
+
+    members: (id: string) =>
+        [...projectKeys.detail(id), "members"] as const,
+};
+
+export const projectMemberKeys = {
+    all: ["project-members"] as const,
+
+    lists: () => [...projectMemberKeys.all, "list"] as const,
+
+    list: (projectId: string) =>
+        [...projectMemberKeys.lists(), projectId] as const,
 };

@@ -14,6 +14,12 @@ import type {
     UpdateProjectPayload,
 } from "../types/project.types";
 
+import type {
+    ProjectMember,
+    AddProjectMemberPayload,
+    UpdateProjectMemberPayload,
+} from "../types/project-member.types";
+
 export interface ProjectQueryParams {
     page?: number;
     limit?: number;
@@ -44,6 +50,45 @@ export const projectService = {
         const response = await apiClient.get<
             ApiResponse<ProjectDetail>
         >(`/projects/${id}`);
+
+        return response.data;
+    },
+
+    async findMembers(projectId: string) {
+        const response = await apiClient.get<
+            ApiResponse<ProjectMember[]>
+        >(`/projects/${projectId}/members`);
+
+        return response.data;
+    },
+
+    async addMember(
+        projectId: string,
+        data: AddProjectMemberPayload,
+    ) {
+        const response = await apiClient.post<
+            ApiResponse<ProjectMember>
+        >(`/projects/${projectId}/members`, data);
+
+        return response.data;
+    },
+
+    async updateMemberRole(
+        projectId: string,
+        userId: string,
+        data: UpdateProjectMemberPayload,
+    ) {
+        const response = await apiClient.patch<
+            ApiResponse<ProjectMember>
+        >(`/projects/${projectId}/members/${userId}`, data);
+
+        return response.data;
+    },
+
+    async removeMember(projectId: string, userId: string) {
+        const response = await apiClient.delete<
+            ApiResponse<never>
+        >(`/projects/${projectId}/members/${userId}`);
 
         return response.data;
     },

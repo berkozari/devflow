@@ -9,6 +9,7 @@ export const errorHandler: ErrorRequestHandler = (
     res,
     _next,
 ) => {
+    console.error("Unhandled Error:", error);
     if (error instanceof ZodError) {
         res.status(400).json({
             success: false,

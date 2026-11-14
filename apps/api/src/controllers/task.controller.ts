@@ -52,6 +52,23 @@ export const getTaskById: RequestHandler = async (req, res) => {
     });
 };
 
+
+export const moveTask: RequestHandler = async (req, res) => {
+    const task = await taskService.move(
+        req.params.projectId as string,
+        req.params.taskId as string,
+        req.user!.id,
+        req.body,
+    );
+
+    res.status(200).json({
+        success: true,
+        message: "Task moved successfully",
+        data: task,
+    });
+};
+
+
 export const updateTask: RequestHandler = async (req, res) => {
     const task = await taskService.update(
         req.params.projectId as string,

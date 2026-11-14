@@ -10,6 +10,10 @@ import { GuestRoute } from "@/features/auth/components/GuestRoute";
 
 import { DashboardLayout } from "@/layout/DashboardLayout";
 
+import { ProjectsPage } from "@/pages/projects/ProjectsPage";
+import { ProjectDetailPage } from "@/pages/projects/ProjectDetailPage";
+import { ProjectSettingsPage } from "@/pages/projects/ProjectSettingsPage";
+
 export const router = createBrowserRouter([
     {
         element: <GuestRoute />,
@@ -33,6 +37,18 @@ export const router = createBrowserRouter([
                     {
                         path: "/dashboard",
                         element: <DashboardPage />,
+                    },
+                    {
+                        path: "/projects",
+                        element: <ProjectsPage />,
+                    },
+                    {
+                        path: "/projects/:projectId",
+                        element: <ProjectDetailPage />,
+                    },
+                    {
+                        path: "/projects/:projectId/settings",
+                        element: <ProjectSettingsPage />,
                     },
                 ],
             },

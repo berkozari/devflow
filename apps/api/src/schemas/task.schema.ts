@@ -96,8 +96,16 @@ export const taskQuerySchema = z.object({
         .default("desc"),
 });
 
+export const moveTaskSchema = z.object({
+    status: taskStatusSchema,
+
+    beforeTaskId: z.string().uuid().nullable(),
+});
+
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 
 export type TaskQuery = z.infer<typeof taskQuerySchema>;
+
+export type MoveTaskInput = z.infer<typeof moveTaskSchema>;

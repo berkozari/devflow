@@ -1,6 +1,5 @@
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
 
 import {
     Dialog,
@@ -14,25 +13,47 @@ import {
 import { Button } from "@/components/ui/button";
 
 import { CreateProjectForm } from "./CreateProjectForm";
-
 import { useCreateProject } from "../hooks/useCreateProject";
 
 import type {
     CreateProjectFormValues,
 } from "../schemas/project.schema";
 
-export function CreateProjectDialog() {
-    const [open, setOpen] = useState(false);
+interface CreateProjectDialogProps {
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
+}
+
+export function CreateProjectDialog({
+    open: controlledOpen,
+    onOpenChange,
+}: CreateProjectDialogProps) {
+    const [internalOpen, setInternalOpen] = useState(false);
 
     const createProject = useCreateProject();
+
+    const isControlled = controlledOpen !== undefined;
+
+    const open = isControlled
+        ? controlledOpen
+        : internalOpen;
+
+    const handleOpenChange = (nextOpen: boolean) => {
+        if (createProject.isPending) return;
+
+        if (!isControlled) {
+            setInternalOpen(nextOpen);
+        }
+
+        onOpenChange?.(nextOpen);
+    };
 
     const handleSubmit = async (
         values: CreateProjectFormValues,
     ) => {
         try {
             await createProject.mutateAsync(values);
-
-            setOpen(false);
+            handleOpenChange(false);
         } catch {
             // Error is handled below.
         }
@@ -41,18 +62,15 @@ export function CreateProjectDialog() {
     return (
         <Dialog
             open={open}
-            onOpenChange={(nextOpen) => {
-                if (!createProject.isPending) {
-                    setOpen(nextOpen);
-                }
-            }}
+            onOpenChange={handleOpenChange}
         >
-            <DialogTrigger asChild>
-                <Button>
-                    <Plus className="mr-2 size-4" />
-                    New Project
-                </Button>
-            </DialogTrigger>
+            {!isControlled && (
+                <DialogTrigger asChild>
+                    <Button>
+                        New Project
+                    </Button>
+                </DialogTrigger>
+            )}
 
             <DialogContent>
                 <DialogHeader>

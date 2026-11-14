@@ -145,6 +145,8 @@ model Task {
   status   TaskStatus   @default(TODO)
   priority TaskPriority @default(MEDIUM)
 
+  position Float @default(0)
+
   projectId  String  @db.Uuid
   assigneeId String? @db.Uuid
   creatorId  String  @db.Uuid
@@ -161,7 +163,7 @@ model Task {
   comments   Comment[]
   activities ActivityLog[]
 
-  @@index([projectId, status])
+  @@index([projectId, status, position])
   @@index([assigneeId])
   @@index([creatorId])
   @@index([dueDate])

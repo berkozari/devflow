@@ -51,6 +51,28 @@ export const projectQuerySchema = z.object({
         .optional(),
 });
 
+export const addProjectMemberSchema = z.object({
+    email: z
+        .string()
+        .trim()
+        .email("Invalid email address")
+        .max(255)
+        .transform((email) => email.toLowerCase()),
+
+    role: z
+        .enum(["ADMIN", "MEMBER"])
+        .default("MEMBER"),
+});
+
+export const updateProjectMemberSchema = z.object({
+    role: z.enum(["ADMIN", "MEMBER"]),
+});
+
+export const projectMemberParamsSchema = z.object({
+    id: z.string().uuid("Invalid project ID"),
+    userId: z.string().uuid("Invalid user ID"),
+});
+
 export type CreateProjectInput = z.infer<
     typeof createProjectSchema
 >;
@@ -61,4 +83,12 @@ export type UpdateProjectInput = z.infer<
 
 export type ProjectQueryInput = z.infer<
     typeof projectQuerySchema
+>;
+
+export type AddProjectMemberInput = z.infer<
+    typeof addProjectMemberSchema
+>;
+
+export type UpdateProjectMemberInput = z.infer<
+    typeof updateProjectMemberSchema
 >;

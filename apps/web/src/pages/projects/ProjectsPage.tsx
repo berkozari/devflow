@@ -1,6 +1,13 @@
-import { CreateProjectDialog } from "@/features/projects/components";
+
+import { useState } from "react";
+
+import { CreateProjectDialog } from "@/features/projects/components/CreateProjectDialog";
+import { ProjectList } from "@/features/projects/components/ProjectList";
 
 export function ProjectsPage() {
+    const [createDialogOpen, setCreateDialogOpen] =
+        useState(false);
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -14,8 +21,15 @@ export function ProjectsPage() {
                     </p>
                 </div>
 
-                <CreateProjectDialog />
+                <CreateProjectDialog
+                    open={createDialogOpen}
+                    onOpenChange={setCreateDialogOpen}
+                />
             </div>
+
+            <ProjectList
+                onCreateProject={() => setCreateDialogOpen(true)}
+            />
         </div>
     );
 }

@@ -1,3 +1,4 @@
+
 import { prisma } from "../config/database.js";
 
 import { taskRepository } from "../repositories/task.repository.js";
@@ -12,6 +13,7 @@ import type {
     CreateTaskInput,
     UpdateTaskInput,
     TaskQuery,
+    MoveTaskInput,
 } from "../schemas/task.schema.js";
 
 import type {
@@ -74,16 +76,29 @@ async function createActivity(
     return activityRepository.create(tx, data);
 }
 
+function canMoveTask(
+    role: string,
+    task: { assigneeId: string | null },
+    userId: string,
+): boolean {
+    if (role === "OWNER" || role === "ADMIN") {
+        return true;
+    }
+
+    if (role === "MEMBER") {
+        return task.assigneeId === userId;
+    }
+
+    return false;
+}
+
 export const taskService = {
     async create(
         projectId: string,
         userId: string,
         data: CreateTaskInput,
     ) {
-        const member = await getProjectMember(
-            projectId,
-            userId,
-        );
+        const member = await getProjectMember(projectId, userId);
 
         if (!canManageTasks(member.role)) {
             throw new AppError(
@@ -92,16 +107,24 @@ export const taskService = {
             );
         }
 
-        await validateAssignee(
-            projectId,
-            data.assigneeId,
-        );
+        await validateAssignee(projectId, data.assigneeId);
 
         return prisma.$transaction(async (tx) => {
+            const lastTask = await taskRepository.getLastPosition(
+                projectId,
+                data.status ?? "TODO",
+                tx,
+            );
+
+            const position = lastTask
+                ? lastTask.position + 1
+                : 0;
+
             const task = await taskRepository.create(
                 projectId,
                 userId,
                 data,
+                position,
                 tx,
             );
 
@@ -185,10 +208,7 @@ export const taskService = {
         userId: string,
         data: UpdateTaskInput,
     ) {
-        const member = await getProjectMember(
-            projectId,
-            userId,
-        );
+        const member = await getProjectMember(projectId, userId);
 
         const task = await taskRepository.findById(
             projectId,
@@ -235,23 +255,7 @@ export const taskService = {
             );
         }
 
-        if (
-            !isManager &&
-            !isCreator &&
-            isAssignee &&
-            data.status !== undefined &&
-            !changesStatus
-        ) {
-            throw new AppError(
-                "You are not allowed to modify these task fields",
-                403,
-            );
-        }
-
-        await validateAssignee(
-            projectId,
-            data.assigneeId,
-        );
+        await validateAssignee(projectId, data.assigneeId);
 
         const activities: {
             action: ActivityAction;
@@ -274,7 +278,10 @@ export const taskService = {
                     },
                     new: {
                         title: data.title ?? task.title,
-                        description: data.description ?? task.description,
+                        description:
+                            data.description !== undefined
+                                ? data.description
+                                : task.description,
                         dueDate:
                             data.dueDate !== undefined
                                 ? data.dueDate
@@ -382,6 +389,194 @@ export const taskService = {
         });
     },
 
+
+    async move(
+        projectId: string,
+        taskId: string,
+        userId: string,
+        data: MoveTaskInput,
+    ) {
+        const member = await getProjectMember(projectId, userId);
+
+        return prisma.$transaction(async (tx) => {
+            // Serialize task ordering operations within this project.
+            await tx.$executeRaw`
+                SELECT pg_advisory_xact_lock(
+                    hashtext(${projectId})::bigint)
+            `;
+
+            const task = await taskRepository.findPositionById(
+                projectId,
+                taskId,
+                tx,
+            );
+
+            if (!task) {
+                throw new AppError("Task not found", 404);
+            }
+
+            if (!canMoveTask(member.role, task, userId)) {
+                throw new AppError(
+                    "You are not allowed to move this task",
+                    403,
+                );
+            }
+
+            const sourceStatus = task.status;
+            const targetStatus = data.status;
+
+            const sourceTasks = await taskRepository.findByStatus(
+                projectId,
+                sourceStatus,
+                tx,
+            );
+
+            const targetTasks =
+                sourceStatus === targetStatus
+                    ? sourceTasks
+                    : await taskRepository.findByStatus(
+                        projectId,
+                        targetStatus,
+                        tx,
+                    );
+
+            const sourceWithoutTask = sourceTasks.filter(
+                (item) => item.id !== taskId,
+            );
+
+            const targetTasksWithoutTask =
+                sourceStatus === targetStatus
+                    ? sourceWithoutTask
+                    : targetTasks;
+
+            let insertIndex = targetTasksWithoutTask.length;
+
+            if (data.beforeTaskId !== null) {
+                if (data.beforeTaskId === taskId) {
+                    throw new AppError(
+                        "A task cannot be moved before itself",
+                        400,
+                    );
+                }
+
+                const beforeIndex = targetTasksWithoutTask.findIndex(
+                    (item) => item.id === data.beforeTaskId,
+                );
+
+                if (beforeIndex === -1) {
+                    throw new AppError(
+                        "Target task not found in destination column",
+                        400,
+                    );
+                }
+
+                insertIndex = beforeIndex;
+            }
+
+            const newTargetTasks = [...targetTasksWithoutTask];
+
+            newTargetTasks.splice(insertIndex, 0, {
+                id: taskId,
+                position: 0,
+            });
+
+            // First assign temporary unique negative positions.
+            const affectedTasks =
+                sourceStatus === targetStatus
+                    ? newTargetTasks
+                    : [...sourceTasks, ...targetTasks];
+
+            for (let index = 0; index < affectedTasks.length; index++) {
+                await tx.task.update({
+                    where: {
+                        id: affectedTasks[index].id,
+                    },
+                    data: {
+                        position: -(index + 1),
+                    },
+                });
+            }
+
+            // Update source column positions when changing columns.
+            if (sourceStatus !== targetStatus) {
+                for (
+                    let index = 0;
+                    index < sourceWithoutTask.length;
+                    index++
+                ) {
+                    await tx.task.update({
+                        where: {
+                            id: sourceWithoutTask[index].id,
+                        },
+                        data: {
+                            position: index,
+                        },
+                    });
+                }
+            }
+
+            // Update destination column positions.
+            for (
+                let index = 0;
+                index < newTargetTasks.length;
+                index++
+            ) {
+                await tx.task.update({
+                    where: {
+                        id: newTargetTasks[index].id,
+                    },
+                    data: {
+                        status: targetStatus,
+                        position: index,
+                    },
+                });
+            }
+
+            await createActivity(tx, {
+                action: "TASK_STATUS_CHANGED",
+                projectId,
+                actorId: userId,
+                taskId,
+                metadata: {
+                    oldStatus: sourceStatus,
+                    newStatus: targetStatus,
+                    oldPosition: task.position,
+                    newPosition: insertIndex,
+                },
+            });
+
+            const updatedTask = await tx.task.findFirst({
+                where: {
+                    id: taskId,
+                    projectId,
+                },
+                include: {
+                    assignee: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                        },
+                    },
+                    creator: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                        },
+                    },
+                },
+            });
+
+            if (!updatedTask) {
+                throw new AppError("Task not found", 404);
+            }
+
+            return updatedTask;
+        });
+    },
+
+
     async delete(
         projectId: string,
         taskId: string,
@@ -431,5 +626,7 @@ export const taskService = {
                 throw new AppError("Task not found", 404);
             }
         });
+
+        return { success: true };
     },
 };

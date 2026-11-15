@@ -17,3 +17,16 @@ export class AppError extends Error {
         Error.captureStackTrace(this, this.constructor);
     }
 }
+
+export interface ValidationErrorDetail {
+    field: string;
+    message: string;
+}
+
+export class RequestValidationError extends AppError {
+    constructor(
+        public readonly errors: ValidationErrorDetail[],
+    ) {
+        super("Validation failed", 400);
+    }
+}

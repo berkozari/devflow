@@ -6,6 +6,8 @@ import { commentRepository } from "../repositories/comment.repository.js";
 import { taskRepository } from "../repositories/task.repository.js";
 import { projectMemberRepository } from "../repositories/project-member.repository.js";
 
+import { notificationService } from "./notification.service.js";
+
 import { AppError } from "../utils/app-error.js";
 
 import type { CreateMentionInput } from "../schemas/mention.schema.js";
@@ -14,10 +16,11 @@ async function getProjectMember(
     projectId: string,
     userId: string,
 ) {
-    const member = await projectMemberRepository.findProjectMember(
-        projectId,
-        userId,
-    );
+    const member =
+        await projectMemberRepository.findProjectMember(
+            projectId,
+            userId,
+        );
 
     if (!member) {
         throw new AppError("Project not found", 404);
@@ -70,29 +73,44 @@ export const mentionService = {
             );
         }
 
-        const members = await Promise.all(
-            uniqueUserIds.map((mentionedUserId) =>
-                projectMemberRepository.findProjectMember(
+        if (uniqueUserIds.length > 0) {
+            const members =
+                await projectMemberRepository.findProjectMembersByUserIds(
                     projectId,
-                    mentionedUserId,
-                ),
-            ),
-        );
+                    uniqueUserIds,
+                );
 
-        if (members.some((member) => !member)) {
-            throw new AppError(
-                "All mentioned users must be project members",
-                400,
-            );
+            if (members.length !== uniqueUserIds.length) {
+                throw new AppError(
+                    "All mentioned users must be project members",
+                    400,
+                );
+            }
         }
 
         return prisma.$transaction(async (tx) => {
-            await mentionRepository.createMany(
-                commentId,
-                uniqueUserIds,
-                userId,
-                tx,
-            );
+            const createdMentions =
+                uniqueUserIds.length > 0
+                    ? await mentionRepository.createManyReturningNew(
+                        commentId,
+                        uniqueUserIds,
+                        tx,
+                    )
+                    : [];
+
+            for (const mention of createdMentions) {
+                await notificationService.create(tx, {
+                    type: "COMMENT_MENTIONED",
+                    title: "You were mentioned in a comment",
+                    userId: mention.userId,
+                    actorId: userId,
+                    projectId,
+                    taskId,
+                    metadata: {
+                        commentId,
+                    },
+                });
+            }
 
             return mentionRepository.findByCommentId(
                 commentId,

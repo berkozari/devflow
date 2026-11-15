@@ -1,11 +1,16 @@
-import { notificationRepository } from "../repositories/notification.repository.js"; import { AppError } from "../utils/app-error.js";
+import { notificationRepository } from "../repositories/notification.repository.js";
+import { AppError } from "../utils/app-error.js";
 
 import type { NotificationQuery } from "../schemas/notification.schema.js";
-import type { Prisma, NotificationType, } from "../generated/prisma/client.js";
+import type { Prisma } from "../generated/prisma/client.js";
+import type { CreateNotificationData } from "../repositories/notification.repository.js";
 
 export const notificationService = {
     async findMany(userId: string, query: NotificationQuery) {
-        const [notifications, total] = await notificationRepository.findMany(userId, query);
+        const [notifications, total] = await notificationRepository.findMany(
+            userId,
+            query,
+        );
 
         return {
             notifications,
@@ -29,7 +34,15 @@ export const notificationService = {
         );
 
         if (result.count === 0) {
-            throw new AppError("Notification not found", 404);
+            // An already-read notification should be idempotently successful.
+            const existing = await notificationRepository.findById(
+                userId,
+                notificationId,
+            );
+
+            if (!existing) {
+                throw new AppError("Notification not found", 404);
+            }
         }
     },
 
@@ -37,20 +50,15 @@ export const notificationService = {
         return notificationRepository.markAllAsRead(userId);
     },
 
-    async create(
-        tx: Prisma.TransactionClient,
-        data: {
-            type: NotificationType;
-            title: string;
-            message?: string;
-            userId: string;
-            actorId?: string;
-            projectId?: string;
-            taskId?: string;
-            metadata?: Prisma.InputJsonValue;
-        },
-    ) {
+    async create(tx: Prisma.TransactionClient, data: CreateNotificationData) {
         return notificationRepository.create(tx, data);
+    },
+
+    async createMany(
+        tx: Prisma.TransactionClient,
+        notifications: CreateNotificationData[],
+    ) {
+        return notificationRepository.createMany(tx, notifications);
     },
 
     async delete(userId: string, notificationId: string) {
@@ -67,5 +75,4 @@ export const notificationService = {
     async deleteAll(userId: string) {
         return notificationRepository.deleteAll(userId);
     },
-
 };

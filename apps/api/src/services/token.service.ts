@@ -1,9 +1,13 @@
 
-import type { Role } from "../generated/prisma/client.js";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import jwt from "jsonwebtoken";
 
+import type { Role } from "../generated/prisma/client.js";
 import { env } from "../config/env.js";
+
+const ACCESS_TOKEN_ISSUER = "devflow-api";
+const ACCESS_TOKEN_AUDIENCE = "devflow-web";
+const ACCESS_TOKEN_ALGORITHM = "HS256" as const;
 
 export const tokenService = {
     generateAccessToken(user: {
@@ -18,16 +22,21 @@ export const tokenService = {
             },
             env.jwtSecret,
             {
+                algorithm: ACCESS_TOKEN_ALGORITHM,
                 subject: user.id,
                 expiresIn: env.accessTokenExpiresIn,
-                issuer: "devflow-api",
-                audience: "devflow-web",
+                issuer: ACCESS_TOKEN_ISSUER,
+                audience: ACCESS_TOKEN_AUDIENCE,
             },
         );
     },
 
     generateRefreshToken() {
         return randomBytes(48).toString("hex");
+    },
+
+    generateTokenFamilyId() {
+        return randomUUID();
     },
 
     hashRefreshToken(token: string) {
@@ -37,19 +46,18 @@ export const tokenService = {
     },
 
     getRefreshTokenExpiry() {
-        const expiresAt = new Date();
-
-        expiresAt.setDate(
-            expiresAt.getDate() + env.refreshTokenExpiresInDays,
+        return new Date(
+            Date.now() +
+            env.refreshTokenExpiresInDays *
+            24 * 60 * 60 * 1000,
         );
-
-        return expiresAt;
     },
 
     verifyAccessToken(token: string) {
         return jwt.verify(token, env.jwtSecret, {
-            issuer: "devflow-api",
-            audience: "devflow-web",
+            issuer: ACCESS_TOKEN_ISSUER,
+            audience: ACCESS_TOKEN_AUDIENCE,
+            algorithms: [ACCESS_TOKEN_ALGORITHM],
         });
     },
 };

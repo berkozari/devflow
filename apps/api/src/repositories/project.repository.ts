@@ -1,4 +1,3 @@
-
 import { prisma } from "../config/database.js";
 
 import type {
@@ -66,9 +65,10 @@ export const projectRepository = {
                 where,
                 skip: (page - 1) * limit,
                 take: limit,
-                orderBy: {
-                    createdAt: "desc",
-                },
+                orderBy: [
+                    { createdAt: "desc" },
+                    { id: "desc" },
+                ],
                 include: {
                     _count: {
                         select: {
@@ -135,6 +135,8 @@ export const projectRepository = {
         });
     },
 
+    // Kept for backwards compatibility until usages are checked.
+    // New membership management should use projectMemberRepository.
     findUserByEmail(email: string) {
         return prisma.user.findUnique({
             where: { email },
@@ -194,6 +196,14 @@ export const projectRepository = {
             where: {
                 projectId,
                 userId,
+                role: {
+                    in: ["ADMIN", "MEMBER"],
+                },
+                project: {
+                    is: {
+                        ownerId: { not: userId },
+                    },
+                },
             },
         });
     },
@@ -208,6 +218,14 @@ export const projectRepository = {
                 projectId_userId: {
                     projectId,
                     userId,
+                },
+                role: {
+                    in: ["ADMIN", "MEMBER"],
+                },
+                project: {
+                    is: {
+                        ownerId: { not: userId },
+                    },
                 },
             },
             data: { role },

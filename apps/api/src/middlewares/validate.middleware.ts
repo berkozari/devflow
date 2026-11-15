@@ -2,7 +2,10 @@
 import type { RequestHandler } from "express";
 import type { ZodType } from "zod";
 
-import { AppError } from "../utils/app-error.js";
+import {
+    RequestValidationError,
+    type ValidationErrorDetail,
+} from "../utils/app-error.js";
 
 interface ValidationSchemas {
     body?: ZodType;
@@ -10,21 +13,25 @@ interface ValidationSchemas {
     query?: ZodType;
 }
 
+type ValidatedRequest = {
+    body?: unknown;
+    params?: unknown;
+    query?: unknown;
+};
+
 declare global {
     namespace Express {
         interface Locals {
-            validated?: {
-                body?: unknown;
-                params?: unknown;
-                query?: unknown;
-            };
+            validated?: ValidatedRequest;
         }
     }
 }
 
 export function validate(schema: ZodType): RequestHandler;
 
-export function validate(schemas: ValidationSchemas): RequestHandler;
+export function validate(
+    schemas: ValidationSchemas,
+): RequestHandler;
 
 export function validate(
     input: ZodType | ValidationSchemas,
@@ -35,13 +42,8 @@ export function validate(
             : input;
 
     return (req, res, next) => {
-        const validated: {
-            body?: unknown;
-            params?: unknown;
-            query?: unknown;
-        } = {};
-
-        const errors: string[] = [];
+        const validated: ValidatedRequest = {};
+        const errors: ValidationErrorDetail[] = [];
 
         const sources = [
             {
@@ -64,13 +66,19 @@ export function validate(
         for (const source of sources) {
             if (!source.schema) continue;
 
-            const result = source.schema.safeParse(source.value);
+            const result = source.schema.safeParse(
+                source.value,
+            );
 
             if (!result.success) {
                 errors.push(
-                    ...result.error.issues.map(
-                        (issue) => issue.message,
-                    ),
+                    ...result.error.issues.map((issue) => ({
+                        field: [
+                            source.key,
+                            ...issue.path.map(String),
+                        ].join("."),
+                        message: issue.message,
+                    })),
                 );
 
                 continue;
@@ -81,16 +89,15 @@ export function validate(
 
         if (errors.length > 0) {
             return next(
-                new AppError(errors.join(", "), 400),
+                new RequestValidationError(errors),
             );
         }
 
-        // Initialize locals for Express response mocks.
-        res.locals ??= {};
+        res.locals.validated = {
+            ...res.locals.validated,
+            ...validated,
+        };
 
-        res.locals.validated = validated;
-
-        // Preserve backward compatibility.
         if (validated.body !== undefined) {
             req.body = validated.body;
         }

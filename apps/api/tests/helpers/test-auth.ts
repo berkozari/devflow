@@ -9,8 +9,6 @@ interface TestUser {
 }
 
 export function createTestAccessToken(user: TestUser): string {
-    console.log("JWT USER:", user);
-
     return tokenService.generateAccessToken(user);
 }
 

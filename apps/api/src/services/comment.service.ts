@@ -1,10 +1,11 @@
-
 import { prisma } from "../config/database.js";
 
 import { commentRepository } from "../repositories/comment.repository.js";
 import { taskRepository } from "../repositories/task.repository.js";
 import { projectMemberRepository } from "../repositories/project-member.repository.js";
 import { activityRepository } from "../repositories/activity.repository.js";
+
+import { notificationService } from "./notification.service.js";
 
 import { AppError } from "../utils/app-error.js";
 
@@ -14,10 +15,7 @@ import type {
     CommentQuery,
 } from "../schemas/comment.schema.js";
 
-async function getProjectMember(
-    projectId: string,
-    userId: string,
-) {
+async function getProjectMember(projectId: string, userId: string) {
     const member = await projectMemberRepository.findProjectMember(
         projectId,
         userId,
@@ -30,14 +28,8 @@ async function getProjectMember(
     return member;
 }
 
-async function getTask(
-    projectId: string,
-    taskId: string,
-) {
-    const task = await taskRepository.findById(
-        projectId,
-        taskId,
-    );
+async function getTask(projectId: string, taskId: string) {
+    const task = await taskRepository.findById(projectId, taskId);
 
     if (!task) {
         throw new AppError("Task not found", 404);
@@ -56,9 +48,11 @@ export const commentService = {
         await getProjectMember(projectId, userId);
         await getTask(projectId, taskId);
 
-        const mentionedUserIds = [
-            ...new Set(data.mentionedUserIds ?? []),
-        ];
+        const mentionedUserIds = [...new Set(data.mentionedUserIds ?? [])];
+
+        if (mentionedUserIds.includes(userId)) {
+            throw new AppError("You cannot mention yourself", 400);
+        }
 
         if (mentionedUserIds.length > 0) {
             const members =
@@ -93,9 +87,22 @@ export const commentService = {
                 taskId,
                 metadata: {
                     commentId: comment.id,
-                    content: comment.content,
                 },
             });
+
+            for (const mentionedUserId of mentionedUserIds) {
+                await notificationService.create(tx, {
+                    type: "COMMENT_MENTIONED",
+                    title: "You were mentioned in a comment",
+                    userId: mentionedUserId,
+                    actorId: userId,
+                    projectId,
+                    taskId,
+                    metadata: {
+                        commentId: comment.id,
+                    },
+                });
+            }
 
             return comment;
         });
@@ -110,11 +117,10 @@ export const commentService = {
         await getProjectMember(projectId, userId);
         await getTask(projectId, taskId);
 
-        const [comments, total] =
-            await commentRepository.findMany(
-                taskId,
-                query,
-            );
+        const [comments, total] = await commentRepository.findMany(
+            taskId,
+            query,
+        );
 
         return {
             comments,
@@ -122,9 +128,7 @@ export const commentService = {
                 page: query.page,
                 limit: query.limit,
                 total,
-                totalPages: Math.ceil(
-                    total / query.limit,
-                ),
+                totalPages: Math.ceil(total / query.limit),
             },
         };
     },
@@ -138,10 +142,7 @@ export const commentService = {
         await getProjectMember(projectId, userId);
         await getTask(projectId, taskId);
 
-        const comment = await commentRepository.findById(
-            taskId,
-            commentId,
-        );
+        const comment = await commentRepository.findById(taskId, commentId);
 
         if (!comment) {
             throw new AppError("Comment not found", 404);
@@ -160,10 +161,7 @@ export const commentService = {
         await getProjectMember(projectId, userId);
         await getTask(projectId, taskId);
 
-        const comment = await commentRepository.findById(
-            taskId,
-            commentId,
-        );
+        const comment = await commentRepository.findById(taskId, commentId);
 
         if (!comment) {
             throw new AppError("Comment not found", 404);
@@ -176,7 +174,7 @@ export const commentService = {
             );
         }
 
-        await prisma.$transaction(async (tx) => {
+        return prisma.$transaction(async (tx) => {
             const result = await commentRepository.update(
                 taskId,
                 commentId,
@@ -199,12 +197,19 @@ export const commentService = {
                     newContent: data.content,
                 },
             });
-        });
 
-        return commentRepository.findById(
-            taskId,
-            commentId,
-        );
+            const updatedComment = await commentRepository.findById(
+                taskId,
+                commentId,
+                tx,
+            );
+
+            if (!updatedComment) {
+                throw new AppError("Comment not found", 404);
+            }
+
+            return updatedComment;
+        });
     },
 
     async delete(
@@ -216,10 +221,7 @@ export const commentService = {
         await getProjectMember(projectId, userId);
         await getTask(projectId, taskId);
 
-        const comment = await commentRepository.findById(
-            taskId,
-            commentId,
-        );
+        const comment = await commentRepository.findById(taskId, commentId);
 
         if (!comment) {
             throw new AppError("Comment not found", 404);

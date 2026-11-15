@@ -1,5 +1,5 @@
 
-import axios, { AxiosHeaders, } from "axios";
+import axios, { AxiosHeaders } from "axios";
 
 import { ApiError } from "@/utils/api-error";
 import { useAuthStore } from "@/stores";
@@ -23,9 +23,18 @@ interface RefreshResponse {
     };
 }
 
+interface CsrfResponse {
+    success: boolean;
+    message: string;
+    data: {
+        csrfToken: string;
+    };
+}
+
 declare module "axios" {
     interface InternalAxiosRequestConfig {
         _retry?: boolean;
+        _csrfRetry?: boolean;
     }
 }
 
@@ -38,35 +47,63 @@ export const apiClient = axios.create({
     },
 });
 
-// Refresh request is shared between concurrent 401 responses.
 let refreshPromise: Promise<string> | null = null;
 
-// Attach access token to outgoing requests.
-apiClient.interceptors.request.use((config) => {
+let csrfToken: string | null = null;
+let csrfPromise: Promise<string> | null = null;
+
+function isSafeMethod(method?: string) {
+    return ["get", "head", "options"].includes(
+        (method ?? "get").toLowerCase(),
+    );
+}
+
+async function getCsrfToken(): Promise<string> {
+    if (csrfToken) {
+        return csrfToken;
+    }
+
+    if (!csrfPromise) {
+        csrfPromise = apiClient
+            .get<CsrfResponse>("/auth/csrf-token")
+            .then((response) => {
+                csrfToken = response.data.data.csrfToken;
+
+                return csrfToken;
+            })
+            .finally(() => {
+                csrfPromise = null;
+            });
+    }
+
+    return csrfPromise;
+}
+
+// Attach authentication and CSRF headers.
+apiClient.interceptors.request.use(async (config) => {
+    config.headers = AxiosHeaders.from(config.headers);
+
     const accessToken = useAuthStore.getState().accessToken;
 
     if (accessToken) {
-        config.headers = AxiosHeaders.from(config.headers);
         config.headers.set(
             "Authorization",
             `Bearer ${accessToken}`,
         );
     }
 
+    if (!isSafeMethod(config.method)) {
+        const token = await getCsrfToken();
+
+        config.headers.set("X-CSRF-Token", token);
+    }
+
     return config;
 });
 
 async function refreshAccessToken(): Promise<string> {
-    const response = await axios.post<RefreshResponse>(
-        `${baseURL}/auth/refresh`,
-        undefined,
-        {
-            withCredentials: true,
-            timeout: 10_000,
-            headers: {
-                Accept: "application/json",
-            },
-        },
+    const response = await apiClient.post<RefreshResponse>(
+        "/auth/refresh",
     );
 
     const newAccessToken = response.data.data.accessToken;
@@ -138,6 +175,23 @@ apiClient.interceptors.response.use(
 
         if (!originalRequest) {
             return Promise.reject(normalizeApiError(error));
+        }
+
+        const responseData = error.response?.data as
+            | { message?: string }
+            | undefined;
+
+        const isCsrfError =
+            error.response?.status === 403 &&
+            responseData?.message === "Invalid or missing CSRF token";
+
+        if (isCsrfError && !originalRequest._csrfRetry) {
+            originalRequest._csrfRetry = true;
+
+            csrfToken = null;
+            csrfPromise = null;
+
+            return apiClient(originalRequest);
         }
 
         const requestUrl = originalRequest.url ?? "";

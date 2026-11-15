@@ -10,6 +10,7 @@ import {
 } from "vitest";
 
 import request from "supertest";
+import type { SuperAgentTest } from "supertest";
 import type { Role } from "../../src/generated/prisma/client.js";
 
 import app from "../../src/app.js";
@@ -23,6 +24,11 @@ import {
 
 import { createAuthHeader } from "../helpers/test-auth.js";
 
+import {
+    getCsrfToken,
+    createCsrfHeader,
+} from "../helpers/test-csrf.js";
+
 interface TestUser {
     id: string;
     email: string;
@@ -34,7 +40,10 @@ describe("Project Member API", () => {
     let admin: TestUser;
     let member: TestUser;
     let target: TestUser;
+
     let projectId: string;
+    let agent: SuperAgentTest;
+    let csrfToken: string;
 
     async function createUser(email: string): Promise<TestUser> {
         const user = await prisma.user.create({
@@ -60,6 +69,10 @@ describe("Project Member API", () => {
     });
 
     beforeEach(async () => {
+        agent = request.agent(app);
+
+        csrfToken = await getCsrfToken(agent);
+
         owner = await createUser(
             `owner-${crypto.randomUUID()}@test.com`,
         );
@@ -117,7 +130,7 @@ describe("Project Member API", () => {
 
     describe("Authentication", () => {
         it("should return 401 without an access token", async () => {
-            const response = await request(app)
+            const response = await agent
                 .get(`/api/v1/projects/${projectId}/members`);
 
             expect(response.status).toBe(401);
@@ -129,7 +142,7 @@ describe("Project Member API", () => {
 
     describe("GET /projects/:projectId/members", () => {
         it("should allow OWNER to list project members", async () => {
-            const response = await request(app)
+            const response = await agent
                 .get(`/api/v1/projects/${projectId}/members`)
                 .set(createAuthHeader(owner));
 
@@ -139,7 +152,7 @@ describe("Project Member API", () => {
         });
 
         it("should allow MEMBER to list project members", async () => {
-            const response = await request(app)
+            const response = await agent
                 .get(`/api/v1/projects/${projectId}/members`)
                 .set(createAuthHeader(member));
 
@@ -152,7 +165,7 @@ describe("Project Member API", () => {
                 `outsider-${crypto.randomUUID()}@test.com`,
             );
 
-            const response = await request(app)
+            const response = await agent
                 .get(`/api/v1/projects/${projectId}/members`)
                 .set(createAuthHeader(outsider));
 
@@ -160,7 +173,7 @@ describe("Project Member API", () => {
         });
 
         it("should reject an invalid project ID", async () => {
-            const response = await request(app)
+            const response = await agent
                 .get("/api/v1/projects/invalid-id/members")
                 .set(createAuthHeader(owner));
 
@@ -168,7 +181,7 @@ describe("Project Member API", () => {
         });
 
         it("should return 404 for a non-existing project", async () => {
-            const response = await request(app)
+            const response = await agent
                 .get(
                     "/api/v1/projects/00000000-0000-4000-8000-000000000001/members",
                 )
@@ -182,9 +195,10 @@ describe("Project Member API", () => {
 
     describe("POST /projects/:projectId/members", () => {
         it("should allow OWNER to add a member", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/members`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     email: target.email,
                 });
@@ -195,9 +209,10 @@ describe("Project Member API", () => {
         });
 
         it("should allow ADMIN to add a MEMBER", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/members`)
                 .set(createAuthHeader(admin))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     email: target.email,
                     role: "MEMBER",
@@ -208,9 +223,10 @@ describe("Project Member API", () => {
         });
 
         it("should prevent ADMIN from adding another ADMIN", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/members`)
                 .set(createAuthHeader(admin))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     email: target.email,
                     role: "ADMIN",
@@ -220,9 +236,10 @@ describe("Project Member API", () => {
         });
 
         it("should prevent MEMBER from adding another member", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/members`)
                 .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     email: target.email,
                 });
@@ -231,9 +248,10 @@ describe("Project Member API", () => {
         });
 
         it("should return 409 when adding an existing member", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/members`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     email: member.email,
                 });
@@ -242,9 +260,10 @@ describe("Project Member API", () => {
         });
 
         it("should reject OWNER as an assignable membership role", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/members`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     email: target.email,
                     role: "OWNER",
@@ -254,9 +273,10 @@ describe("Project Member API", () => {
         });
 
         it("should reject an invalid email", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/members`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     email: "invalid-email",
                 });
@@ -265,9 +285,10 @@ describe("Project Member API", () => {
         });
 
         it("should reject an empty email", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/members`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     email: "",
                 });
@@ -276,9 +297,10 @@ describe("Project Member API", () => {
         });
 
         it("should return 404 when the user does not exist", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/members`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     email: `nonexistent-${crypto.randomUUID()}@test.com`,
                 });
@@ -287,9 +309,10 @@ describe("Project Member API", () => {
         });
 
         it("should reject an invalid project role", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/members`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     email: target.email,
                     role: "SUPER_ADMIN",
@@ -303,11 +326,12 @@ describe("Project Member API", () => {
 
     describe("PATCH /projects/:projectId/members/:userId", () => {
         it("should allow OWNER to update a member role", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(
                     `/api/v1/projects/${projectId}/members/${member.id}`,
                 )
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     role: "ADMIN",
                 });
@@ -317,11 +341,12 @@ describe("Project Member API", () => {
         });
 
         it("should prevent ADMIN from changing member roles", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(
                     `/api/v1/projects/${projectId}/members/${member.id}`,
                 )
                 .set(createAuthHeader(admin))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     role: "ADMIN",
                 });
@@ -330,11 +355,12 @@ describe("Project Member API", () => {
         });
 
         it("should prevent changing the OWNER role", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(
                     `/api/v1/projects/${projectId}/members/${owner.id}`,
                 )
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     role: "ADMIN",
                 });
@@ -343,11 +369,12 @@ describe("Project Member API", () => {
         });
 
         it("should reject an invalid user ID", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(
                     `/api/v1/projects/${projectId}/members/invalid-id`,
                 )
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     role: "ADMIN",
                 });
@@ -356,22 +383,127 @@ describe("Project Member API", () => {
         });
 
         it("should reject a missing role", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(
                     `/api/v1/projects/${projectId}/members/${member.id}`,
                 )
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
+                .send({});
+
+            expect(response.status).toBe(400);
+        });
+        it("should reject an invalid email", async () => {
+            const response = await agent
+                .post(`/api/v1/projects/${projectId}/members`)
+                .send({
+                    email: "invalid-email",
+                });
+
+            expect(response.status).toBe(400);
+        });
+
+        it("should reject an empty email", async () => {
+            const response = await agent
+                .post(`/api/v1/projects/${projectId}/members`)
+                .send({
+                    email: "",
+                });
+
+            expect(response.status).toBe(400);
+        });
+
+        it("should return 404 when the user does not exist", async () => {
+            const response = await agent
+                .post(`/api/v1/projects/${projectId}/members`)
+                .send({
+                    email: `nonexistent-${crypto.randomUUID()}@test.com`,
+                });
+
+            expect(response.status).toBe(404);
+        });
+
+        it("should reject an invalid project role", async () => {
+            const response = await agent
+                .post(`/api/v1/projects/${projectId}/members`)
+                .send({
+                    email: target.email,
+                    role: "SUPER_ADMIN",
+                });
+
+            expect(response.status).toBe(400);
+        });
+    });
+
+    // UPDATE MEMBER ROLE
+
+    describe("PATCH /projects/:projectId/members/:userId", () => {
+        it("should allow OWNER to update a member role", async () => {
+            const response = await agent
+                .patch(
+                    `/api/v1/projects/${projectId}/members/${member.id}`,
+                )
+                .send({
+                    role: "ADMIN",
+                });
+
+            expect(response.status).toBe(200);
+            expect(response.body.data.role).toBe("ADMIN");
+        });
+
+        it("should prevent ADMIN from changing member roles", async () => {
+            await agent.setUser(admin);
+
+            const response = await agent
+                .patch(
+                    `/api/v1/projects/${projectId}/members/${member.id}`,
+                )
+                .send({
+                    role: "ADMIN",
+                });
+
+            expect(response.status).toBe(403);
+        });
+
+        it("should prevent changing the OWNER role", async () => {
+            const response = await agent
+                .patch(
+                    `/api/v1/projects/${projectId}/members/${owner.id}`,
+                )
+                .send({
+                    role: "ADMIN",
+                });
+
+            expect(response.status).toBe(403);
+        });
+
+        it("should reject an invalid user ID", async () => {
+            const response = await agent
+                .patch(
+                    `/api/v1/projects/${projectId}/members/invalid-id`,
+                )
+                .send({
+                    role: "ADMIN",
+                });
+
+            expect(response.status).toBe(400);
+        });
+
+        it("should reject a missing role", async () => {
+            const response = await agent
+                .patch(
+                    `/api/v1/projects/${projectId}/members/${member.id}`,
+                )
                 .send({});
 
             expect(response.status).toBe(400);
         });
 
         it("should reject OWNER as an update role", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(
                     `/api/v1/projects/${projectId}/members/${member.id}`,
                 )
-                .set(createAuthHeader(owner))
                 .send({
                     role: "OWNER",
                 });
@@ -380,11 +512,10 @@ describe("Project Member API", () => {
         });
 
         it("should return 404 when updating a non-existing member", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(
                     `/api/v1/projects/${projectId}/members/${target.id}`,
                 )
-                .set(createAuthHeader(owner))
                 .send({
                     role: "ADMIN",
                 });
@@ -397,11 +528,10 @@ describe("Project Member API", () => {
 
     describe("DELETE /projects/:projectId/members/:userId", () => {
         it("should allow OWNER to remove a member", async () => {
-            const response = await request(app)
+            const response = await agent
                 .delete(
                     `/api/v1/projects/${projectId}/members/${member.id}`,
-                )
-                .set(createAuthHeader(owner));
+                );
 
             expect(response.status).toBe(200);
             expect(response.body.success).toBe(true);
@@ -419,41 +549,39 @@ describe("Project Member API", () => {
         });
 
         it("should prevent ADMIN from removing another ADMIN", async () => {
-            const response = await request(app)
+            await agent.setUser(admin);
+
+            const response = await agent
                 .delete(
                     `/api/v1/projects/${projectId}/members/${admin.id}`,
-                )
-                .set(createAuthHeader(admin));
+                );
 
             expect(response.status).toBe(403);
         });
 
         it("should prevent removing the project OWNER", async () => {
-            const response = await request(app)
+            const response = await agent
                 .delete(
                     `/api/v1/projects/${projectId}/members/${owner.id}`,
-                )
-                .set(createAuthHeader(owner));
+                );
 
             expect(response.status).toBe(403);
         });
 
         it("should reject an invalid user ID", async () => {
-            const response = await request(app)
+            const response = await agent
                 .delete(
                     `/api/v1/projects/${projectId}/members/invalid-id`,
-                )
-                .set(createAuthHeader(owner));
+                );
 
             expect(response.status).toBe(400);
         });
 
         it("should return 404 when removing a non-existing member", async () => {
-            const response = await request(app)
+            const response = await agent
                 .delete(
                     `/api/v1/projects/${projectId}/members/${target.id}`,
-                )
-                .set(createAuthHeader(owner));
+                );
 
             expect(response.status).toBe(404);
         });

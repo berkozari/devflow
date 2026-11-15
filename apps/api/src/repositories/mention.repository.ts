@@ -1,4 +1,3 @@
-
 import { prisma } from "../config/database.js";
 
 import type { Prisma } from "../generated/prisma/client.js";
@@ -7,18 +6,33 @@ export const mentionRepository = {
     createMany(
         commentId: string,
         userIds: string[],
-        createdBy: string,
         tx?: Prisma.TransactionClient,
     ) {
         const db = tx ?? prisma;
 
         return db.mention.createMany({
+            data: [...new Set(userIds)].map((userId) => ({
+                commentId,
+                userId,
+            })),
+            skipDuplicates: true,
+        });
+    },
+
+    createManyReturningNew(
+        commentId: string,
+        userIds: string[],
+        tx: Prisma.TransactionClient,
+    ) {
+        return tx.mention.createManyAndReturn({
             data: userIds.map((userId) => ({
                 commentId,
                 userId,
-                createdBy,
             })),
             skipDuplicates: true,
+            select: {
+                userId: true,
+            },
         });
     },
 
@@ -29,9 +43,7 @@ export const mentionRepository = {
         const db = tx ?? prisma;
 
         return db.mention.findMany({
-            where: {
-                commentId,
-            },
+            where: { commentId },
             include: {
                 user: {
                     select: {
@@ -41,9 +53,10 @@ export const mentionRepository = {
                     },
                 },
             },
-            orderBy: {
-                createdAt: "asc",
-            },
+            orderBy: [
+                { createdAt: "asc" },
+                { id: "asc" },
+            ],
         });
     },
 
@@ -54,9 +67,7 @@ export const mentionRepository = {
         const db = tx ?? prisma;
 
         return db.mention.deleteMany({
-            where: {
-                commentId,
-            },
+            where: { commentId },
         });
     },
 };

@@ -1,6 +1,9 @@
-
 import { prisma } from "../config/database.js";
 import type { ProjectRole } from "../generated/prisma/client.js";
+
+// Project ownership is defined by Project.ownerId; this repository must not
+// assign OWNER or mutate the owner's membership through management endpoints.
+type AssignableRole = Extract<ProjectRole, "ADMIN" | "MEMBER">;
 
 export const projectMemberRepository = {
     findProject(projectId: string) {
@@ -27,9 +30,10 @@ export const projectMemberRepository = {
     findProjectMembers(projectId: string) {
         return prisma.projectMember.findMany({
             where: { projectId },
-            orderBy: {
-                createdAt: "asc",
-            },
+            orderBy: [
+                { createdAt: "asc" },
+                { id: "asc" },
+            ],
             include: {
                 user: {
                     select: {
@@ -53,10 +57,7 @@ export const projectMemberRepository = {
         });
     },
 
-    findProjectMembersByUserIds(
-        projectId: string,
-        userIds: string[],
-    ) {
+    findProjectMembersByUserIds(projectId: string, userIds: string[]) {
         return prisma.projectMember.findMany({
             where: {
                 projectId,
@@ -70,7 +71,7 @@ export const projectMemberRepository = {
         });
     },
 
-    create(projectId: string, userId: string, role: ProjectRole) {
+    create(projectId: string, userId: string, role: AssignableRole) {
         return prisma.projectMember.create({
             data: {
                 projectId,
@@ -89,28 +90,42 @@ export const projectMemberRepository = {
         });
     },
 
-    updateRole(
-        projectId: string,
-        userId: string,
-        role: ProjectRole,
-    ) {
+    updateRole(projectId: string, userId: string, role: AssignableRole) {
         return prisma.projectMember.update({
             where: {
                 projectId_userId: {
                     projectId,
                     userId,
                 },
+                role: {
+                    in: ["ADMIN", "MEMBER"],
+                },
+                project: {
+                    is: {
+                        ownerId: { not: userId },
+                    },
+                },
             },
             data: { role },
         });
     },
 
-    delete(projectId: string, userId: string) {
-        return prisma.projectMember.delete({
+    delete(
+        projectId: string,
+        userId: string,
+        allowedRoles: AssignableRole[] = ["ADMIN", "MEMBER"],
+    ) {
+        return prisma.projectMember.deleteMany({
             where: {
-                projectId_userId: {
-                    projectId,
-                    userId,
+                projectId,
+                userId,
+                role: {
+                    in: allowedRoles,
+                },
+                project: {
+                    is: {
+                        ownerId: { not: userId },
+                    },
                 },
             },
         });

@@ -1,0 +1,80 @@
+{
+  "meta": {
+    "timestamp": "2026-11-15T12:55:38.643Z",
+    "nodeVersion": "v24.22.3",
+    "baseUrl": "http://localhost:3000/api/v1",
+    "endpoints": [
+      "overview",
+      "overdue",
+      "workload",
+      "activities"
+    ],
+    "query": {},
+    "requestsPerEndpoint": 10,
+    "concurrency": 2,
+    "coldMode": false,
+    "coldAssumption": "No other client requests the same cache keys during TTL wait"
+  },
+  "measurements": [
+    {
+      "endpoint": "overview",
+      "coldSingleMs": null,
+      "attempted": 10,
+      "statusCounts": {
+        "200": 10
+      },
+      "wallMs": 17.45,
+      "successRps": 572.92,
+      "minMs": 1.65,
+      "meanMs": 3.42,
+      "p50Ms": 2.96,
+      "p95Ms": 6.23,
+      "maxMs": 6.23
+    },
+    {
+      "endpoint": "overdue",
+      "coldSingleMs": null,
+      "attempted": 10,
+      "statusCounts": {
+        "200": 10
+      },
+      "wallMs": 11.62,
+      "successRps": 860.64,
+      "minMs": 1.93,
+      "meanMs": 2.3,
+      "p50Ms": 2.32,
+      "p95Ms": 2.64,
+      "maxMs": 2.64
+    },
+    {
+      "endpoint": "workload",
+      "coldSingleMs": null,
+      "attempted": 10,
+      "statusCounts": {
+        "200": 10
+      },
+      "wallMs": 11.56,
+      "successRps": 865.04,
+      "minMs": 1.55,
+      "meanMs": 2.29,
+      "p50Ms": 2.16,
+      "p95Ms": 3.06,
+      "maxMs": 3.06
+    },
+    {
+      "endpoint": "activities",
+      "coldSingleMs": null,
+      "attempted": 10,
+      "statusCounts": {
+        "200": 10
+      },
+      "wallMs": 13.64,
+      "successRps": 732.93,
+      "minMs": 2.27,
+      "meanMs": 2.71,
+      "p50Ms": 2.7,
+      "p95Ms": 3.22,
+      "maxMs": 3.22
+    }
+  ]
+}

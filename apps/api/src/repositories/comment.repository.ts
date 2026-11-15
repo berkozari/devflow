@@ -1,4 +1,3 @@
-
 import { prisma } from "../config/database.js";
 
 import type { Prisma } from "../generated/prisma/client.js";
@@ -44,13 +43,10 @@ export const commentRepository = {
                 content: data.content,
                 taskId,
                 authorId,
-
                 mentions: {
                     create: [
                         ...new Set(data.mentionedUserIds ?? []),
-                    ].map((userId) => ({
-                        userId,
-                    })),
+                    ].map((userId) => ({ userId })),
                 },
             },
             include: commentInclude,
@@ -60,8 +56,11 @@ export const commentRepository = {
     findById(
         taskId: string,
         commentId: string,
+        tx?: Prisma.TransactionClient,
     ) {
-        return prisma.comment.findFirst({
+        const db = tx ?? prisma;
+
+        return db.comment.findFirst({
             where: {
                 id: commentId,
                 taskId,
@@ -70,30 +69,22 @@ export const commentRepository = {
         });
     },
 
-    findMany(
-        taskId: string,
-        query: CommentQuery,
-    ) {
+    findMany(taskId: string, query: CommentQuery) {
         const { page, limit } = query;
-
-        const where = {
-            taskId,
-        };
+        const where = { taskId };
 
         return prisma.$transaction([
             prisma.comment.findMany({
                 where,
                 skip: (page - 1) * limit,
                 take: limit,
-                orderBy: {
-                    createdAt: "asc",
-                },
+                orderBy: [
+                    { createdAt: "asc" },
+                    { id: "asc" },
+                ],
                 include: commentInclude,
             }),
-
-            prisma.comment.count({
-                where,
-            }),
+            prisma.comment.count({ where }),
         ]);
     },
 

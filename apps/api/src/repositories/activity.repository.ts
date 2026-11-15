@@ -47,9 +47,14 @@ export const activityRepository = {
                 where,
                 skip: (query.page - 1) * query.limit,
                 take: query.limit,
-                orderBy: {
-                    createdAt: "desc",
-                },
+                orderBy: [
+                    {
+                        createdAt: "desc",
+                    },
+                    {
+                        id: "desc",
+                    },
+                ],
                 include: {
                     actor: {
                         select: {

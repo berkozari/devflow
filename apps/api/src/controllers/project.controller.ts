@@ -1,6 +1,7 @@
 
 import type { RequestHandler } from "express";
 import { projectService } from "../services/project.service.js";
+import { projectMemberService } from "../services/project-member.service.js";
 import {
     createProjectSchema,
     updateProjectSchema,
@@ -176,7 +177,7 @@ export const getProjectMembers: RequestHandler = async (
 
         const { id } = projectParamsSchema.parse(req.params);
 
-        const members = await projectService.getMembers(
+        const members = await projectMemberService.findMembers(
             id,
             req.user.id,
         );
@@ -207,7 +208,7 @@ export const addProjectMember: RequestHandler = async (
         const { id } = projectParamsSchema.parse(req.params);
         const data = addProjectMemberSchema.parse(req.body);
 
-        const member = await projectService.addMember(
+        const member = await projectMemberService.addMember(
             id,
             req.user.id,
             data,
@@ -242,7 +243,7 @@ export const updateProjectMemberRole: RequestHandler = async (
 
         const data = updateProjectMemberSchema.parse(req.body);
 
-        const member = await projectService.updateMemberRole(
+        const member = await projectMemberService.updateMemberRole(
             id,
             req.user.id,
             userId,
@@ -276,7 +277,7 @@ export const removeProjectMember: RequestHandler = async (
         const { id, userId } =
             projectMemberParamsSchema.parse(req.params);
 
-        await projectService.removeMember(
+        await projectMemberService.removeMember(
             id,
             req.user.id,
             userId,

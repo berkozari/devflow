@@ -15,55 +15,57 @@ export const taskPrioritySchema = z.enum([
     "URGENT",
 ]);
 
-export const createTaskSchema = z.object({
-    title: z
-        .string()
-        .trim()
-        .min(2, "Title must contain at least 2 characters")
-        .max(150, "Title cannot exceed 150 characters"),
+const taskTitleSchema = z
+    .string()
+    .trim()
+    .min(2, "Title must contain at least 2 characters")
+    .max(150, "Title cannot exceed 150 characters");
 
-    description: z
-        .string()
-        .trim()
-        .max(5000, "Description cannot exceed 5000 characters")
-        .nullable()
-        .optional(),
+const taskDescriptionSchema = z
+    .string()
+    .trim()
+    .max(5000, "Description cannot exceed 5000 characters")
+    .nullable();
+
+const taskAssigneeSchema = z.string().uuid().nullable();
+
+const taskDueDateSchema = z.iso.datetime().nullable();
+
+export const createTaskSchema = z.object({
+    title: taskTitleSchema,
+
+    description: taskDescriptionSchema.optional(),
 
     status: taskStatusSchema.optional(),
 
     priority: taskPrioritySchema.optional(),
 
-    assigneeId: z.string().uuid().nullable().optional(),
+    assigneeId: taskAssigneeSchema.optional(),
 
-    dueDate: z.iso.datetime().nullable().optional(),
+    dueDate: taskDueDateSchema.optional(),
 });
 
-export const updateTaskSchema = z.object({
-    title: z
-        .string()
-        .trim()
-        .min(2, "Title must contain at least 2 characters")
-        .max(150, "Title cannot exceed 150 characters")
-        .optional(),
+export const updateTaskSchema = z
+    .object({
+        title: taskTitleSchema.optional(),
 
-    description: z
-        .string()
-        .trim()
-        .max(5000, "Description cannot exceed 5000 characters")
-        .nullable()
-        .optional(),
+        description: taskDescriptionSchema.optional(),
 
-    status: taskStatusSchema.optional(),
+        status: taskStatusSchema.optional(),
 
-    priority: taskPrioritySchema.optional(),
+        priority: taskPrioritySchema.optional(),
 
-    assigneeId: z.string().uuid().nullable().optional(),
+        assigneeId: taskAssigneeSchema.optional(),
 
-    dueDate: z.iso.datetime().nullable().optional(),
-}).refine(
-    (data) => Object.keys(data).length > 0,
-    "At least one field must be provided",
-);
+        dueDate: taskDueDateSchema.optional(),
+    })
+    .refine(
+        (data) =>
+            Object.values(data).some(
+                (value) => value !== undefined,
+            ),
+        "At least one field must be provided",
+    );
 
 export const taskParamsSchema = z.object({
     projectId: z.string().uuid("Invalid project ID"),
@@ -85,15 +87,18 @@ export const taskQuerySchema = z.object({
 
     page: z.coerce.number().int().min(1).default(1),
 
-    limit: z.coerce.number().int().min(1).max(100).default(10),
+    limit: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(100)
+        .default(10),
 
     sortBy: z
         .enum(["createdAt", "updatedAt", "dueDate", "title"])
         .default("createdAt"),
 
-    sortOrder: z
-        .enum(["asc", "desc"])
-        .default("desc"),
+    sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 
 export const moveTaskSchema = z.object({
@@ -102,9 +107,13 @@ export const moveTaskSchema = z.object({
     beforeTaskId: z.string().uuid().nullable(),
 });
 
-export type CreateTaskInput = z.infer<typeof createTaskSchema>;
+export type CreateTaskInput = z.infer<
+    typeof createTaskSchema
+>;
 
-export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
+export type UpdateTaskInput = z.infer<
+    typeof updateTaskSchema
+>;
 
 export type TaskQuery = z.infer<typeof taskQuerySchema>;
 

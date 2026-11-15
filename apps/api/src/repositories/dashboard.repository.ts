@@ -1,4 +1,3 @@
-
 import { prisma } from "../config/database.js";
 
 import type { DashboardQueryInput } from "../schemas/dashboard.schema.js";
@@ -49,9 +48,6 @@ export const dashboardRepository = {
             },
             select: {
                 id: true,
-                name: true,
-                status: true,
-                createdAt: true,
             },
         });
     },
@@ -63,53 +59,30 @@ export const dashboardRepository = {
     ) {
         const createdAtFilter = getCreatedAtFilter(query);
 
+        // Grouped counts replace five individual count() queries.
+        // Project and task date filters intentionally use createdAt.
         const [
-            totalProjects,
-            activeProjects,
-            completedProjects,
-            totalTasks,
-            completedTasks,
+            projectsByStatus,
+            tasksByStatus,
             overdueTasks,
             unassignedTasks,
         ] = await Promise.all([
-            prisma.project.count({
+            prisma.project.groupBy({
+                by: ["status"],
                 where: {
                     id: { in: projectIds },
                     ...createdAtFilter,
                 },
+                _count: { _all: true },
             }),
-
-            prisma.project.count({
-                where: {
-                    id: { in: projectIds },
-                    status: "ACTIVE",
-                    ...createdAtFilter,
-                },
-            }),
-
-            prisma.project.count({
-                where: {
-                    id: { in: projectIds },
-                    status: "COMPLETED",
-                    ...createdAtFilter,
-                },
-            }),
-
-            prisma.task.count({
+            prisma.task.groupBy({
+                by: ["status"],
                 where: {
                     projectId: { in: projectIds },
                     ...createdAtFilter,
                 },
+                _count: { _all: true },
             }),
-
-            prisma.task.count({
-                where: {
-                    projectId: { in: projectIds },
-                    status: "DONE",
-                    ...createdAtFilter,
-                },
-            }),
-
             prisma.task.count({
                 where: {
                     projectId: { in: projectIds },
@@ -120,7 +93,6 @@ export const dashboardRepository = {
                     },
                 },
             }),
-
             prisma.task.count({
                 where: {
                     projectId: { in: projectIds },
@@ -130,6 +102,25 @@ export const dashboardRepository = {
                 },
             }),
         ]);
+
+        const totalProjects = projectsByStatus.reduce(
+            (total, item) => total + item._count._all,
+            0,
+        );
+        const activeProjects = projectsByStatus.find(
+            (item) => item.status === "ACTIVE",
+        )?._count._all ?? 0;
+        const completedProjects = projectsByStatus.find(
+            (item) => item.status === "COMPLETED",
+        )?._count._all ?? 0;
+
+        const totalTasks = tasksByStatus.reduce(
+            (total, item) => total + item._count._all,
+            0,
+        );
+        const completedTasks = tasksByStatus.find(
+            (item) => item.status === "DONE",
+        )?._count._all ?? 0;
 
         return {
             totalProjects,
@@ -189,9 +180,10 @@ export const dashboardRepository = {
                     ...getDueDateRange(query),
                 },
             },
-            orderBy: {
-                dueDate: "asc",
-            },
+            orderBy: [
+                { dueDate: "asc" },
+                { id: "asc" },
+            ],
             take: limit,
             select: {
                 id: true,
@@ -285,9 +277,10 @@ export const dashboardRepository = {
                 projectId: { in: projectIds },
                 ...getActivityDateFilter(query),
             },
-            orderBy: {
-                createdAt: "desc",
-            },
+            orderBy: [
+                { createdAt: "desc" },
+                { id: "desc" },
+            ],
             take: limit,
             select: {
                 id: true,
@@ -324,7 +317,12 @@ export const dashboardRepository = {
             prisma.project.findMany({
                 where: {
                     id: { in: projectIds },
+                    ...getCreatedAtFilter(query),
                 },
+                orderBy: [
+                    { createdAt: "desc" },
+                    { id: "desc" },
+                ],
                 select: {
                     id: true,
                     name: true,

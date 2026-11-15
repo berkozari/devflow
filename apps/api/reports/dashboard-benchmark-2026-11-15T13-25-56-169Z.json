@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "timestamp": "2026-11-15T13:25:56.170Z",
+    "nodeVersion": "v24.22.3",
+    "baseUrl": "http://127.0.0.1:3000/api/v1",
+    "endpoints": [
+      "overview"
+    ],
+    "query": {},
+    "requestsPerEndpoint": 10,
+    "concurrency": 2,
+    "coldMode": true,
+    "coldAssumption": "No other client requests the same cache keys during TTL wait"
+  },
+  "measurements": [
+    {
+      "endpoint": "overview",
+      "coldSingleMs": 59.03,
+      "attempted": 10,
+      "statusCounts": {
+        "200": 10
+      },
+      "wallMs": 24.6,
+      "successRps": 406.55,
+      "minMs": 3.83,
+      "meanMs": 4.82,
+      "p50Ms": 4.1,
+      "p95Ms": 7.03,
+      "maxMs": 7.03
+    }
+  ]
+}

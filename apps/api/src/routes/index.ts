@@ -1,5 +1,6 @@
 import { Router } from "express";
 import authRouter from "./auth.routes.js";
+import csrfRouter from "./csrf.routes.js";
 import userRouter from "./user.routes.js";
 import adminRouter from "./admin.routes.js";
 import projectRouter from "./project.routes.js";
@@ -9,8 +10,11 @@ import commentRouter from "./comment.routes.js";
 import activityRoutes from "./activity.routes.js";
 import notificationRoutes from "./notification.routes.js";
 import dashboardRoutes from "./dashboard.routes.js";
+import { generalRateLimiter } from "../middlewares/rate-limit.middleware.js";
 
 const router = Router();
+
+router.use(generalRateLimiter);
 
 router.get("/", (_req, res) => {
     res.status(200).json({
@@ -19,6 +23,7 @@ router.get("/", (_req, res) => {
     });
 });
 
+router.use("/csrf", csrfRouter);
 router.use("/auth", authRouter);
 router.use("/users", userRouter);
 router.use("/admin", adminRouter);

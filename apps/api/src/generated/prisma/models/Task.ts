@@ -707,10 +707,6 @@ export type FloatFieldUpdateOperationsInput = {
   divide?: number
 }
 
-export type NullableDateTimeFieldUpdateOperationsInput = {
-  set?: Date | string | null
-}
-
 export type TaskCreateNestedOneWithoutCommentsInput = {
   create?: Prisma.XOR<Prisma.TaskCreateWithoutCommentsInput, Prisma.TaskUncheckedCreateWithoutCommentsInput>
   connectOrCreate?: Prisma.TaskCreateOrConnectWithoutCommentsInput

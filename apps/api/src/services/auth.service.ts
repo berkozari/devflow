@@ -47,14 +47,14 @@ export const authService = {
         }
 
         const accessToken = tokenService.generateAccessToken(user);
-
         const refreshToken = tokenService.generateRefreshToken();
 
-        const tokenHash = tokenService.hashRefreshToken(refreshToken);
+        const familyId = tokenService.generateTokenFamilyId();
 
         await userRepository.createRefreshToken({
-            tokenHash,
+            tokenHash: tokenService.hashRefreshToken(refreshToken),
             userId: user.id,
+            familyId,
             expiresAt: tokenService.getRefreshTokenExpiry(),
         });
 
@@ -69,29 +69,38 @@ export const authService = {
         };
     },
 
-
     async refresh(rawToken: string) {
         const tokenHash = tokenService.hashRefreshToken(rawToken);
 
-        const storedToken = await userRepository.findRefreshToken(tokenHash);
+        const storedToken =
+            await userRepository.findRefreshToken(tokenHash);
 
-        if (!storedToken || storedToken.expiresAt <= new Date()) {
+        if (
+            !storedToken ||
+            storedToken.expiresAt <= new Date() ||
+            storedToken.revokedAt
+        ) {
             throw new AppError("Invalid or expired refresh token", 401);
         }
 
         const newRefreshToken = tokenService.generateRefreshToken();
 
-        const rotated = await userRepository.rotateRefreshToken(
-            storedToken.id,
-            {
+        const result =
+            await userRepository.consumeAndRotateRefreshToken({
+                oldTokenId: storedToken.id,
                 tokenHash: tokenService.hashRefreshToken(newRefreshToken),
                 userId: storedToken.userId,
+                familyId: storedToken.familyId,
                 expiresAt: tokenService.getRefreshTokenExpiry(),
-            },
-        );
+            });
 
-        if (!rotated) {
-            throw new AppError("Refresh token is no longer valid", 401);
+        if (result.status === "REUSE") {
+            // Security event: a previously consumed token was presented again.
+            throw new AppError("Refresh token reuse detected", 401);
+        }
+
+        if (result.status !== "ROTATED") {
+            throw new AppError("Invalid or expired refresh token", 401);
         }
 
         return {
@@ -112,10 +121,13 @@ export const authService = {
 
         const tokenHash = tokenService.hashRefreshToken(rawToken);
 
-        const storedToken = await userRepository.findRefreshToken(tokenHash);
+        const storedToken =
+            await userRepository.findRefreshToken(tokenHash);
 
         if (storedToken) {
-            await userRepository.deleteRefreshToken(storedToken.id);
+            await userRepository.revokeTokenFamily(
+                storedToken.familyId,
+            );
         }
     },
 

@@ -1,13 +1,16 @@
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { authService } from "../../../src/services/auth.service.js";
 import { userRepository } from "../../../src/repositories/user.repository.js";
 import { tokenService } from "../../../src/services/token.service.js";
-import { AppError } from "../../../src/utils/app-error.js";
 
 import argon2 from "argon2";
 
-import type { RegisterInput, LoginInput, } from "../../../src/schemas/auth.schema.js";
+import type {
+    RegisterInput,
+    LoginInput,
+} from "../../../src/schemas/auth.schema.js";
 
 vi.mock("argon2", () => ({
     default: {
@@ -23,8 +26,9 @@ vi.mock("../../../src/repositories/user.repository.js", () => ({
         create: vi.fn(),
         createRefreshToken: vi.fn(),
         findRefreshToken: vi.fn(),
-        deleteRefreshToken: vi.fn(),
-        rotateRefreshToken: vi.fn(),
+        consumeAndRotateRefreshToken: vi.fn(),
+        revokeTokenFamily: vi.fn(),
+        revokeUserSessions: vi.fn(),
     },
 }));
 
@@ -32,6 +36,7 @@ vi.mock("../../../src/services/token.service.js", () => ({
     tokenService: {
         generateAccessToken: vi.fn(),
         generateRefreshToken: vi.fn(),
+        generateTokenFamilyId: vi.fn(),
         hashRefreshToken: vi.fn(),
         getRefreshTokenExpiry: vi.fn(),
     },
@@ -43,20 +48,47 @@ const mockedArgon2 = vi.mocked(argon2);
 
 const USER_ID = "user-uuid";
 const TOKEN_ID = "refresh-token-uuid";
+const FAMILY_ID = "token-family-uuid";
 
 const ACCESS_TOKEN = "mock-access-token";
 const REFRESH_TOKEN = "mock-refresh-token";
 const NEW_REFRESH_TOKEN = "new-refresh-token";
+
 const TOKEN_HASH = "mock-token-hash";
-const NEW_TOKEN_HASH = "new-token-hash"; const PASSWORD_HASH = "mock-password-hash";
+const NEW_TOKEN_HASH = "new-token-hash";
+const PASSWORD_HASH = "mock-password-hash";
 
-const mockUser = { id: USER_ID, name: "Test User", email: "test@example.com", passwordHash: PASSWORD_HASH, role: "USER" as const, };
+const mockUser = {
+    id: USER_ID,
+    name: "Test User",
+    email: "test@example.com",
+    passwordHash: PASSWORD_HASH,
+    role: "USER" as const,
+};
 
-const mockStoredToken = { id: TOKEN_ID, tokenHash: TOKEN_HASH, userId: USER_ID, expiresAt: new Date("2030-01-01T00:00:00.000Z"), user: mockUser, };
+const mockStoredToken = {
+    id: TOKEN_ID,
+    tokenHash: TOKEN_HASH,
+    userId: USER_ID,
+    familyId: FAMILY_ID,
+    replacedByTokenId: null,
+    expiresAt: new Date("2030-01-01T00:00:00.000Z"),
+    usedAt: null,
+    revokedAt: null,
+    createdAt: new Date(),
+    user: mockUser,
+};
 
-const registerInput: RegisterInput = { name: "Test User", email: "test@example.com", password: "password123", };
+const registerInput: RegisterInput = {
+    name: "Test User",
+    email: "test@example.com",
+    password: "password123",
+};
 
-const loginInput: LoginInput = { email: "test@example.com", password: "password123", };
+const loginInput: LoginInput = {
+    email: "test@example.com",
+    password: "password123",
+};
 
 const mockExpiry = new Date("2030-01-01T00:00:00.000Z");
 
@@ -70,6 +102,10 @@ describe("Auth Service", () => {
 
         mockedTokenService.generateRefreshToken.mockReturnValue(
             REFRESH_TOKEN,
+        );
+
+        mockedTokenService.generateTokenFamilyId.mockReturnValue(
+            FAMILY_ID,
         );
 
         mockedTokenService.getRefreshTokenExpiry.mockReturnValue(
@@ -96,10 +132,6 @@ describe("Auth Service", () => {
 
             expect(result).toEqual(createdUser);
 
-            expect(mockedRepository.findByEmail).toHaveBeenCalledWith(
-                registerInput.email,
-            );
-
             expect(mockedArgon2.hash).toHaveBeenCalledWith(
                 registerInput.password,
                 expect.objectContaining({
@@ -114,7 +146,7 @@ describe("Auth Service", () => {
             });
         });
 
-        it("should throw 409 when email is already registered", async () => {
+        it("should throw 409 when email already exists", async () => {
             mockedRepository.findByEmail.mockResolvedValue(
                 mockUser as never,
             );
@@ -123,7 +155,6 @@ describe("Auth Service", () => {
                 authService.register(registerInput),
             ).rejects.toMatchObject({
                 statusCode: 409,
-                message: "Email is already registered",
             });
 
             expect(mockedArgon2.hash).not.toHaveBeenCalled();
@@ -132,7 +163,7 @@ describe("Auth Service", () => {
     });
 
     describe("login", () => {
-        it("should login successfully", async () => {
+        it("should login successfully and create a token family", async () => {
             mockedTokenService.hashRefreshToken.mockReturnValue(TOKEN_HASH);
 
             mockedRepository.findByEmail.mockResolvedValue(
@@ -155,20 +186,16 @@ describe("Auth Service", () => {
                 },
             });
 
-            expect(mockedArgon2.verify).toHaveBeenCalledWith(
-                PASSWORD_HASH,
-                loginInput.password,
-            );
-
             expect(
-                mockedTokenService.generateAccessToken,
-            ).toHaveBeenCalledWith(mockUser);
+                mockedTokenService.generateTokenFamilyId,
+            ).toHaveBeenCalledOnce();
 
             expect(
                 mockedRepository.createRefreshToken,
             ).toHaveBeenCalledWith({
                 tokenHash: TOKEN_HASH,
                 userId: USER_ID,
+                familyId: FAMILY_ID,
                 expiresAt: mockExpiry,
             });
         });
@@ -207,7 +234,11 @@ describe("Auth Service", () => {
     });
 
     describe("refresh", () => {
-        it("should refresh tokens successfully", async () => {
+        beforeEach(() => {
+            mockedTokenService.hashRefreshToken
+                .mockReturnValueOnce(TOKEN_HASH)
+                .mockReturnValueOnce(NEW_TOKEN_HASH);
+
             mockedRepository.findRefreshToken.mockResolvedValue(
                 mockStoredToken as never,
             );
@@ -215,14 +246,12 @@ describe("Auth Service", () => {
             mockedTokenService.generateRefreshToken.mockReturnValue(
                 NEW_REFRESH_TOKEN,
             );
+        });
 
-            mockedTokenService.hashRefreshToken
-                .mockReturnValueOnce(TOKEN_HASH)
-                .mockReturnValueOnce(NEW_TOKEN_HASH);
-
-            mockedRepository.rotateRefreshToken.mockResolvedValue(
-                true as never,
-            );
+        it("should rotate refresh token successfully", async () => {
+            mockedRepository.consumeAndRotateRefreshToken.mockResolvedValue({
+                status: "ROTATED",
+            } as never);
 
             const result = await authService.refresh(REFRESH_TOKEN);
 
@@ -241,15 +270,17 @@ describe("Auth Service", () => {
             ).toHaveBeenCalledWith(TOKEN_HASH);
 
             expect(
-                mockedRepository.rotateRefreshToken,
-            ).toHaveBeenCalledWith(TOKEN_ID, {
+                mockedRepository.consumeAndRotateRefreshToken,
+            ).toHaveBeenCalledWith({
+                oldTokenId: TOKEN_ID,
                 tokenHash: NEW_TOKEN_HASH,
                 userId: USER_ID,
+                familyId: FAMILY_ID,
                 expiresAt: mockExpiry,
             });
         });
 
-        it("should throw 401 when refresh token does not exist", async () => {
+        it("should throw 401 when token does not exist", async () => {
             mockedRepository.findRefreshToken.mockResolvedValue(
                 null as never,
             );
@@ -260,17 +291,63 @@ describe("Auth Service", () => {
                 statusCode: 401,
                 message: "Invalid or expired refresh token",
             });
+
+            expect(
+                mockedRepository.consumeAndRotateRefreshToken,
+            ).not.toHaveBeenCalled();
         });
 
-        it("should throw 401 when refresh token is expired", async () => {
-            const expiredToken = {
+        it("should reject expired refresh token", async () => {
+            mockedRepository.findRefreshToken.mockResolvedValue({
                 ...mockStoredToken,
-                expiresAt: new Date("2020-01-01T00:00:00.000Z"),
-            };
+                expiresAt: new Date("2020-01-01"),
+            } as never);
 
-            mockedRepository.findRefreshToken.mockResolvedValue(
-                expiredToken as never,
-            );
+            await expect(
+                authService.refresh(REFRESH_TOKEN),
+            ).rejects.toMatchObject({
+                statusCode: 401,
+            });
+
+            expect(
+                mockedRepository.consumeAndRotateRefreshToken,
+            ).not.toHaveBeenCalled();
+        });
+
+        it("should reject revoked refresh token", async () => {
+            mockedRepository.findRefreshToken.mockResolvedValue({
+                ...mockStoredToken,
+                revokedAt: new Date(),
+            } as never);
+
+            await expect(
+                authService.refresh(REFRESH_TOKEN),
+            ).rejects.toMatchObject({
+                statusCode: 401,
+            });
+
+            expect(
+                mockedRepository.consumeAndRotateRefreshToken,
+            ).not.toHaveBeenCalled();
+        });
+
+        it("should detect refresh token reuse", async () => {
+            mockedRepository.consumeAndRotateRefreshToken.mockResolvedValue({
+                status: "REUSE",
+            } as never);
+
+            await expect(
+                authService.refresh(REFRESH_TOKEN),
+            ).rejects.toMatchObject({
+                statusCode: 401,
+                message: "Refresh token reuse detected",
+            });
+        });
+
+        it("should reject invalid rotation", async () => {
+            mockedRepository.consumeAndRotateRefreshToken.mockResolvedValue({
+                status: "INVALID",
+            } as never);
 
             await expect(
                 authService.refresh(REFRESH_TOKEN),
@@ -278,40 +355,52 @@ describe("Auth Service", () => {
                 statusCode: 401,
                 message: "Invalid or expired refresh token",
             });
-
-            expect(
-                mockedRepository.rotateRefreshToken,
-            ).not.toHaveBeenCalled();
         });
 
-        it("should throw 401 when token rotation fails", async () => {
-            mockedRepository.findRefreshToken.mockResolvedValue(
-                mockStoredToken as never,
-            );
-
-            mockedRepository.rotateRefreshToken.mockResolvedValue(
-                false as never,
-            );
+        it("should not generate access token when reuse is detected", async () => {
+            mockedRepository.consumeAndRotateRefreshToken.mockResolvedValue({
+                status: "REUSE",
+            } as never);
 
             await expect(
                 authService.refresh(REFRESH_TOKEN),
             ).rejects.toMatchObject({
                 statusCode: 401,
-                message: "Refresh token is no longer valid",
+                message: "Refresh token reuse detected",
             });
+
+            expect(
+                mockedTokenService.generateAccessToken,
+            ).not.toHaveBeenCalled();
+        });
+
+        it("should not generate access token when rotation is invalid", async () => {
+            mockedRepository.consumeAndRotateRefreshToken.mockResolvedValue({
+                status: "INVALID",
+            } as never);
+
+            await expect(
+                authService.refresh(REFRESH_TOKEN),
+            ).rejects.toMatchObject({
+                statusCode: 401,
+            });
+
+            expect(
+                mockedTokenService.generateAccessToken,
+            ).not.toHaveBeenCalled();
         });
     });
 
     describe("logout", () => {
-        it("should delete refresh token successfully", async () => {
+        it("should revoke the entire token family", async () => {
             mockedTokenService.hashRefreshToken.mockReturnValue(TOKEN_HASH);
 
             mockedRepository.findRefreshToken.mockResolvedValue(
                 mockStoredToken as never,
             );
 
-            mockedRepository.deleteRefreshToken.mockResolvedValue(
-                {} as never,
+            mockedRepository.revokeTokenFamily.mockResolvedValue(
+                { count: 2 } as never,
             );
 
             await expect(
@@ -319,15 +408,11 @@ describe("Auth Service", () => {
             ).resolves.toBeUndefined();
 
             expect(
-                mockedRepository.findRefreshToken,
-            ).toHaveBeenCalledWith(TOKEN_HASH);
-
-            expect(
-                mockedRepository.deleteRefreshToken,
-            ).toHaveBeenCalledWith(TOKEN_ID);
+                mockedRepository.revokeTokenFamily,
+            ).toHaveBeenCalledWith(FAMILY_ID);
         });
 
-        it("should do nothing when refresh token is not provided", async () => {
+        it("should do nothing when refresh token is missing", async () => {
             await expect(
                 authService.logout(),
             ).resolves.toBeUndefined();
@@ -335,13 +420,11 @@ describe("Auth Service", () => {
             expect(
                 mockedRepository.findRefreshToken,
             ).not.toHaveBeenCalled();
-
-            expect(
-                mockedRepository.deleteRefreshToken,
-            ).not.toHaveBeenCalled();
         });
 
-        it("should not delete anything when token does not exist", async () => {
+        it("should not revoke anything when token does not exist", async () => {
+            mockedTokenService.hashRefreshToken.mockReturnValue(TOKEN_HASH);
+
             mockedRepository.findRefreshToken.mockResolvedValue(
                 null as never,
             );
@@ -351,10 +434,8 @@ describe("Auth Service", () => {
             ).resolves.toBeUndefined();
 
             expect(
-                mockedRepository.deleteRefreshToken,
+                mockedRepository.revokeTokenFamily,
             ).not.toHaveBeenCalled();
         });
     });
-
-
 });

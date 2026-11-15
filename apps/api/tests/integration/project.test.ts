@@ -1,5 +1,14 @@
 
-import { beforeAll, afterAll, beforeEach, describe, expect, it } from "vitest";
+import {
+    beforeAll,
+    afterAll,
+    afterEach,
+    beforeEach,
+    describe,
+    expect,
+    it,
+} from "vitest";
+
 import request from "supertest";
 
 import app from "../../src/app.js";
@@ -15,7 +24,13 @@ import {
     createAuthHeader,
 } from "../helpers/test-auth.js";
 
+import {
+    getCsrfToken,
+    createCsrfHeader,
+} from "../helpers/test-csrf.js";
+
 import type { Role } from "../../src/generated/prisma/client.js";
+import type { SuperAgentTest } from "supertest";
 
 interface TestUser {
     id: string;
@@ -64,13 +79,24 @@ describe("Project API", () => {
     let owner: TestUser;
     let outsider: TestUser;
 
+    let agent: SuperAgentTest;
+    let csrfToken: string;
+
     beforeAll(async () => {
         await prisma.$connect();
     });
 
     beforeEach(async () => {
+        agent = request.agent(app);
+
+        csrfToken = await getCsrfToken(agent);
+
         owner = await createTestUser();
         outsider = await createTestUser();
+    });
+
+    afterEach(async () => {
+        await cleanupTestData();
     });
 
     afterAll(async () => {
@@ -80,8 +106,9 @@ describe("Project API", () => {
 
     describe("POST /projects", () => {
         it("should return 401 without an access token", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post("/api/v1/projects")
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     name: "New Project",
                 });
@@ -90,9 +117,10 @@ describe("Project API", () => {
         });
 
         it("should create a project successfully", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post("/api/v1/projects")
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     name: "New Project",
                     description: "Project description",
@@ -106,9 +134,10 @@ describe("Project API", () => {
         });
 
         it("should automatically add the creator as OWNER", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post("/api/v1/projects")
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     name: "Owner Project",
                 });
@@ -131,9 +160,10 @@ describe("Project API", () => {
         });
 
         it("should reject a project name shorter than 3 characters", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post("/api/v1/projects")
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     name: "AB",
                 });
@@ -142,9 +172,10 @@ describe("Project API", () => {
         });
 
         it("should reject a project name longer than 100 characters", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post("/api/v1/projects")
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     name: "A".repeat(101),
                 });
@@ -153,9 +184,10 @@ describe("Project API", () => {
         });
 
         it("should reject an empty project name", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post("/api/v1/projects")
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     name: "",
                 });
@@ -166,7 +198,7 @@ describe("Project API", () => {
 
     describe("GET /projects", () => {
         it("should return 401 without an access token", async () => {
-            const response = await request(app)
+            const response = await agent
                 .get("/api/v1/projects");
 
             expect(response.status).toBe(401);
@@ -175,7 +207,7 @@ describe("Project API", () => {
         it("should return projects belonging to the authenticated user", async () => {
             await createTestProject(owner.id);
 
-            const response = await request(app)
+            const response = await agent
                 .get("/api/v1/projects")
                 .set(createAuthHeader(owner));
 
@@ -189,7 +221,7 @@ describe("Project API", () => {
             await createTestProject(owner.id);
             await createTestProject(outsider.id);
 
-            const response = await request(app)
+            const response = await agent
                 .get("/api/v1/projects")
                 .set(createAuthHeader(owner));
 
@@ -203,7 +235,7 @@ describe("Project API", () => {
         });
 
         it("should return pagination information", async () => {
-            const response = await request(app)
+            const response = await agent
                 .get("/api/v1/projects?page=1&limit=5")
                 .set(createAuthHeader(owner));
 
@@ -215,7 +247,7 @@ describe("Project API", () => {
         });
 
         it("should reject an invalid page number", async () => {
-            const response = await request(app)
+            const response = await agent
                 .get("/api/v1/projects?page=0")
                 .set(createAuthHeader(owner));
 
@@ -223,7 +255,7 @@ describe("Project API", () => {
         });
 
         it("should reject a limit greater than 50", async () => {
-            const response = await request(app)
+            const response = await agent
                 .get("/api/v1/projects?limit=100")
                 .set(createAuthHeader(owner));
 
@@ -231,7 +263,7 @@ describe("Project API", () => {
         });
 
         it("should filter projects by status", async () => {
-            const response = await request(app)
+            const response = await agent
                 .get("/api/v1/projects?status=ACTIVE")
                 .set(createAuthHeader(owner));
 
@@ -248,7 +280,7 @@ describe("Project API", () => {
 
     describe("GET /projects/:id", () => {
         it("should return 401 without an access token", async () => {
-            const response = await request(app)
+            const response = await agent
                 .get(`/api/v1/projects/${crypto.randomUUID()}`);
 
             expect(response.status).toBe(401);
@@ -257,7 +289,7 @@ describe("Project API", () => {
         it("should return a project by ID", async () => {
             const project = await createTestProject(owner.id);
 
-            const response = await request(app)
+            const response = await agent
                 .get(`/api/v1/projects/${project.id}`)
                 .set(createAuthHeader(owner));
 
@@ -268,7 +300,7 @@ describe("Project API", () => {
         it("should return 404 for another user's project", async () => {
             const project = await createTestProject(owner.id);
 
-            const response = await request(app)
+            const response = await agent
                 .get(`/api/v1/projects/${project.id}`)
                 .set(createAuthHeader(outsider));
 
@@ -276,7 +308,7 @@ describe("Project API", () => {
         });
 
         it("should reject an invalid project ID", async () => {
-            const response = await request(app)
+            const response = await agent
                 .get("/api/v1/projects/invalid-id")
                 .set(createAuthHeader(owner));
 
@@ -286,8 +318,9 @@ describe("Project API", () => {
 
     describe("PATCH /projects/:id", () => {
         it("should return 401 without an access token", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(`/api/v1/projects/${crypto.randomUUID()}`)
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     name: "Updated Project",
                 });
@@ -298,9 +331,10 @@ describe("Project API", () => {
         it("should update a project successfully", async () => {
             const project = await createTestProject(owner.id);
 
-            const response = await request(app)
+            const response = await agent
                 .patch(`/api/v1/projects/${project.id}`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     name: "Updated Project",
                 });
@@ -312,9 +346,10 @@ describe("Project API", () => {
         it("should update project status", async () => {
             const project = await createTestProject(owner.id);
 
-            const response = await request(app)
+            const response = await agent
                 .patch(`/api/v1/projects/${project.id}`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     status: "ACTIVE",
                 });
@@ -326,9 +361,10 @@ describe("Project API", () => {
         it("should reject an empty update body", async () => {
             const project = await createTestProject(owner.id);
 
-            const response = await request(app)
+            const response = await agent
                 .patch(`/api/v1/projects/${project.id}`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({});
 
             expect(response.status).toBe(400);
@@ -337,9 +373,10 @@ describe("Project API", () => {
         it("should reject updates from another user", async () => {
             const project = await createTestProject(owner.id);
 
-            const response = await request(app)
+            const response = await agent
                 .patch(`/api/v1/projects/${project.id}`)
                 .set(createAuthHeader(outsider))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     name: "Unauthorized Update",
                 });
@@ -348,9 +385,10 @@ describe("Project API", () => {
         });
 
         it("should reject an invalid project ID", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch("/api/v1/projects/invalid-id")
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     name: "Updated Project",
                 });
@@ -361,8 +399,9 @@ describe("Project API", () => {
 
     describe("DELETE /projects/:id", () => {
         it("should return 401 without an access token", async () => {
-            const response = await request(app)
-                .delete(`/api/v1/projects/${crypto.randomUUID()}`);
+            const response = await agent
+                .delete(`/api/v1/projects/${crypto.randomUUID()}`)
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(401);
         });
@@ -370,36 +409,39 @@ describe("Project API", () => {
         it("should delete a project successfully", async () => {
             const project = await createTestProject(owner.id);
 
-            const response = await request(app)
+            const response = await agent
                 .delete(`/api/v1/projects/${project.id}`)
-                .set(createAuthHeader(owner));
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(200);
             expect(response.body.success).toBe(true);
 
             const deletedProject = await prisma.project.findUnique({
-                where: { id: project.id },
+                where: {
+                    id: project.id,
+                },
             });
 
             expect(deletedProject).toBeNull();
-
-            trackProject(project.id);
         });
 
         it("should reject deletion by another user", async () => {
             const project = await createTestProject(owner.id);
 
-            const response = await request(app)
+            const response = await agent
                 .delete(`/api/v1/projects/${project.id}`)
-                .set(createAuthHeader(outsider));
+                .set(createAuthHeader(outsider))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(404);
         });
 
         it("should reject an invalid project ID", async () => {
-            const response = await request(app)
+            const response = await agent
                 .delete("/api/v1/projects/invalid-id")
-                .set(createAuthHeader(owner));
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(400);
         });

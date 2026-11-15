@@ -1,8 +1,7 @@
-
 import type { RequestHandler } from "express";
 
 import { taskService } from "../services/task.service.js";
-import { taskQuerySchema } from "../schemas/task.schema.js";
+import type { TaskQuery } from "../schemas/task.schema.js";
 
 export const createTask: RequestHandler = async (req, res) => {
     const task = await taskService.create(
@@ -20,7 +19,13 @@ export const createTask: RequestHandler = async (req, res) => {
 
 export const getTasks: RequestHandler = async (req, res, next) => {
     try {
-        const query = taskQuerySchema.parse(req.query);
+        // task.routes.ts runs validate({ query: taskQuerySchema }) first.
+        // Read Zod's parsed/defaulted result instead of parsing twice.
+        const query = res.locals.validated?.query as TaskQuery | undefined;
+
+        if (!query) {
+            throw new Error("Validated task query is missing");
+        }
 
         const result = await taskService.findMany(
             req.params.projectId as string,
@@ -34,7 +39,6 @@ export const getTasks: RequestHandler = async (req, res, next) => {
             pagination: result.pagination,
         });
     } catch (error) {
-        console.error("GET TASKS ERROR:", error);
         next(error);
     }
 };
@@ -46,12 +50,8 @@ export const getTaskById: RequestHandler = async (req, res) => {
         req.user!.id,
     );
 
-    res.status(200).json({
-        success: true,
-        data: task,
-    });
+    res.status(200).json({ success: true, data: task });
 };
-
 
 export const moveTask: RequestHandler = async (req, res) => {
     const task = await taskService.move(
@@ -67,7 +67,6 @@ export const moveTask: RequestHandler = async (req, res) => {
         data: task,
     });
 };
-
 
 export const updateTask: RequestHandler = async (req, res) => {
     const task = await taskService.update(

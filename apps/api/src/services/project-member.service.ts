@@ -1,19 +1,12 @@
-
-import { Prisma } from "../generated/prisma/client.js";
+import { Prisma, type ProjectRole } from "../generated/prisma/client.js";
 import { projectMemberRepository } from "../repositories/project-member.repository.js";
 import type {
     AddProjectMemberInput,
     UpdateProjectMemberInput,
 } from "../schemas/project-member.schema.js";
-
 import { AppError } from "../utils/app-error.js";
 
-type ProjectRole = "OWNER" | "ADMIN" | "MEMBER";
-
-function throwHttpError(
-    statusCode: number,
-    message: string,
-): never {
+function throwHttpError(statusCode: number, message: string): never {
     throw new AppError(message, statusCode);
 }
 
@@ -27,35 +20,28 @@ async function getActorRole(
         throwHttpError(404, "Project not found");
     }
 
-    // Project.ownerId is the canonical owner reference.
+    // Project.ownerId is the canonical ownership reference.
     if (project.ownerId === actorId) {
         return "OWNER";
     }
 
-    const membership =
-        await projectMemberRepository.findProjectMember(
-            projectId,
-            actorId,
-        );
+    const membership = await projectMemberRepository.findProjectMember(
+        projectId,
+        actorId,
+    );
 
     if (!membership) {
         throwHttpError(404, "Project not found");
     }
 
     if (membership.role === "OWNER") {
-        throwHttpError(
-            403,
-            "Invalid project membership role",
-        );
+        throwHttpError(403, "Invalid project membership role");
     }
 
     return membership.role;
 }
 
-async function requireManager(
-    projectId: string,
-    actorId: string,
-) {
+async function requireManager(projectId: string, actorId: string) {
     const role = await getActorRole(projectId, actorId);
 
     if (role !== "OWNER" && role !== "ADMIN") {
@@ -68,7 +54,6 @@ async function requireManager(
 export const projectMemberService = {
     async findMembers(projectId: string, actorId: string) {
         await getActorRole(projectId, actorId);
-
         return projectMemberRepository.findProjectMembers(projectId);
     },
 
@@ -80,15 +65,10 @@ export const projectMemberService = {
         const actorRole = await requireManager(projectId, actorId);
 
         if (actorRole === "ADMIN" && data.role !== "MEMBER") {
-            throwHttpError(
-                403,
-                "Admins can only add members with MEMBER role",
-            );
+            throwHttpError(403, "Admins can only add members with MEMBER role");
         }
 
-        const user = await projectMemberRepository.findUserByEmail(
-            data.email,
-        );
+        const user = await projectMemberRepository.findUserByEmail(data.email);
 
         if (!user) {
             throwHttpError(404, "User not found");
@@ -101,10 +81,7 @@ export const projectMemberService = {
         }
 
         const existingMembership =
-            await projectMemberRepository.findProjectMember(
-                projectId,
-                user.id,
-            );
+            await projectMemberRepository.findProjectMember(projectId, user.id);
 
         if (existingMembership) {
             throwHttpError(409, "User is already a project member");
@@ -121,10 +98,7 @@ export const projectMemberService = {
                 error instanceof Prisma.PrismaClientKnownRequestError &&
                 error.code === "P2002"
             ) {
-                throwHttpError(
-                    409,
-                    "User is already a project member",
-                );
+                throwHttpError(409, "User is already a project member");
             }
 
             throw error;
@@ -138,7 +112,6 @@ export const projectMemberService = {
         data: UpdateProjectMemberInput,
     ) {
         const actorRole = await requireManager(projectId, actorId);
-
         const project = await projectMemberRepository.findProject(projectId);
 
         if (!project) {
@@ -150,34 +123,36 @@ export const projectMemberService = {
         }
 
         if (actorRole !== "OWNER") {
-            throwHttpError(
-                403,
-                "Only the project owner can change member roles",
-            );
+            throwHttpError(403, "Only the project owner can change member roles");
         }
 
         const targetMembership =
-            await projectMemberRepository.findProjectMember(
-                projectId,
-                userId,
-            );
+            await projectMemberRepository.findProjectMember(projectId, userId);
 
         if (!targetMembership) {
             throwHttpError(404, "Project member not found");
         }
 
         if (targetMembership.role === "OWNER") {
-            throwHttpError(
-                403,
-                "Owner role cannot be changed through this endpoint",
-            );
+            throwHttpError(403, "Owner role cannot be changed through this endpoint");
         }
 
-        return projectMemberRepository.updateRole(
-            projectId,
-            userId,
-            data.role,
-        );
+        try {
+            return await projectMemberRepository.updateRole(
+                projectId,
+                userId,
+                data.role,
+            );
+        } catch (error) {
+            if (
+                error instanceof Prisma.PrismaClientKnownRequestError &&
+                error.code === "P2025"
+            ) {
+                throwHttpError(409, "Project membership changed or no longer exists");
+            }
+
+            throw error;
+        }
     },
 
     async removeMember(
@@ -185,8 +160,7 @@ export const projectMemberService = {
         actorId: string,
         userId: string,
     ) {
-        const actorRole = await requireManager(projectId, actorId);
-
+        const actorRole = await getActorRole(projectId, actorId);
         const project = await projectMemberRepository.findProject(projectId);
 
         if (!project) {
@@ -197,33 +171,46 @@ export const projectMemberService = {
             throwHttpError(403, "Project owner cannot be removed");
         }
 
+        // ADMIN and MEMBER can leave their own project.
+        if (actorId === userId) {
+            const result = await projectMemberRepository.delete(projectId, actorId);
+
+            if (result.count === 0) {
+                throwHttpError(404, "Project member not found");
+            }
+
+            return { success: true };
+        }
+
+        if (actorRole !== "OWNER" && actorRole !== "ADMIN") {
+            throwHttpError(403, "Insufficient project permissions");
+        }
+
         const targetMembership =
-            await projectMemberRepository.findProjectMember(
-                projectId,
-                userId,
-            );
+            await projectMemberRepository.findProjectMember(projectId, userId);
 
         if (!targetMembership) {
             throwHttpError(404, "Project member not found");
         }
 
         if (targetMembership.role === "OWNER") {
-            throwHttpError(
-                403,
-                "Project owner cannot be removed",
-            );
+            throwHttpError(403, "Project owner cannot be removed");
         }
 
-        if (
-            actorRole === "ADMIN" &&
-            targetMembership.role !== "MEMBER"
-        ) {
-            throwHttpError(
-                403,
-                "Admins can only remove regular members",
-            );
+        if (actorRole === "ADMIN" && targetMembership.role !== "MEMBER") {
+            throwHttpError(403, "Admins can only remove regular members");
         }
 
-        return projectMemberRepository.delete(projectId, userId);
+        const result = await projectMemberRepository.delete(
+            projectId,
+            userId,
+            actorRole === "ADMIN" ? ["MEMBER"] : ["ADMIN", "MEMBER"],
+        );
+
+        if (result.count === 0) {
+            throwHttpError(409, "Project membership changed or no longer exists");
+        }
+
+        return { success: true };
     },
 };

@@ -1,10 +1,25 @@
 
 import type { CookieOptions } from "express";
 
-export const refreshCookieOptions: CookieOptions = {
+import { env } from "./env.js";
+
+const refreshCookieBaseOptions: CookieOptions = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: env.nodeEnv === "production",
     sameSite: "lax",
     path: "/api/v1/auth",
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+};
+
+export const refreshCookieOptions: CookieOptions = {
+    ...refreshCookieBaseOptions,
+    maxAge:
+        env.refreshTokenExpiresInDays *
+        24 *
+        60 *
+        60 *
+        1000,
+};
+
+export const refreshCookieClearOptions: CookieOptions = {
+    ...refreshCookieBaseOptions,
 };

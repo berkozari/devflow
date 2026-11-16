@@ -29,9 +29,11 @@ function wrapper({ children }: PropsWithChildren) {
 beforeEach(() => {
     vi.restoreAllMocks();
     vi.resetAllMocks();
-    client = new QueryClient({ defaultOptions: {
-        queries: { retry: false, gcTime: 0 }, mutations: { retry: false },
-    } });
+    client = new QueryClient({
+        defaultOptions: {
+            queries: { retry: false, gcTime: 0 }, mutations: { retry: false },
+        }
+    });
     vi.spyOn(client, "invalidateQueries").mockResolvedValue(undefined);
     vi.spyOn(client, "removeQueries");
     for (const fn of [...Object.values(service), ...Object.values(members)]) fn.mockResolvedValue({ success: true });
@@ -53,7 +55,7 @@ describe("Projects: mutation hooks", () => {
         service.create.mockRejectedValueOnce(new Error("Server rejected"));
         const { result } = renderHook(() => useCreateProject(), { wrapper });
         await act(async () => {
-            await expect(result.current.mutateAsync({ name: "Launch" })).rejects.toThrow("Server rejected");
+            await expect(result.current.mutateAsync({ name: "Launch" })).rejects.toMatchObject({ message: "Server rejected" });
         });
         expect(client.invalidateQueries).not.toHaveBeenCalled();
     });

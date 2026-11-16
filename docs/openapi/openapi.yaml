@@ -1,0 +1,371 @@
+
+openapi: 3.1.0
+
+info:
+  title: DevFlow API
+  version: 1.0.0-draft
+  description: |
+    Draft API contract based on reviewed Express routes, controllers,
+    and Zod schemas.
+
+    Response data shapes for user records are deliberately left open
+    until service DTOs are reviewed.
+
+    CSRF protection applies to unsafe methods and requires
+    X-CSRF-Token plus associated cookies.
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development (confirm PORT in your environment)
+
+tags:
+  - name: Authentication
+  - name: CSRF
+
+paths:
+  /auth/csrf-token:
+    get:
+      tags: [Authentication, CSRF]
+      summary: Generate a CSRF token (auth route)
+      operationId: getAuthCsrfToken
+      description: Returns a token in the standard success envelope. Preserve response cookies for unsafe requests.
+      responses:
+        '200':
+          description: CSRF token generated
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrfEnvelope'
+
+  /csrf/csrf-token:
+    get:
+      tags: [CSRF]
+      summary: Generate a CSRF token (dedicated route)
+      operationId: getCsrfToken
+      description: This existing endpoint returns a different response envelope from /auth/csrf-token.
+      responses:
+        '200':
+          description: CSRF token generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandaloneCsrfResponse'
+
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a user
+      operationId: register
+      security:
+        - csrfHeader: []
+      description: Requires the CSRF session cookies associated with the supplied token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully (user DTO to be documented from auth service)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessWithUnspecifiedData'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Log in
+      operationId: login
+      security:
+        - csrfHeader: []
+      description: Requires CSRF cookies and header; successful login also sets an HttpOnly refreshToken cookie.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Rotate refresh token and obtain a new access token
+      operationId: refresh
+      security:
+        - refreshCookie: []
+          csrfHeader: []
+      responses:
+        '200':
+          description: Token refreshed successfully; rotates the refreshToken cookie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Log out
+      operationId: logout
+      security:
+        - csrfHeader: []
+      description: Refresh cookie is optional in the controller; the service determines revocation behavior.
+      responses:
+        '200':
+          description: Logout successful; clears refreshToken cookie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessWithoutData'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token returned by login and refresh.
+
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: refreshToken
+      description: HttpOnly refresh cookie scoped to /api/v1/auth.
+
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: Requires the associated CSRF cookies; obtain token from one of the documented CSRF routes.
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 50
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Trimmed and lowercased by Zod.
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Trimmed and lowercased by Zod.
+        password:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 128
+
+    CsrfEnvelope:
+      type: object
+      required: [success, message, data]
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: CSRF token generated
+        data:
+          type: object
+          required: [csrfToken]
+          properties:
+            csrfToken:
+              type: string
+
+    StandaloneCsrfResponse:
+      type: object
+      required: [success, csrfToken]
+      properties:
+        success:
+          type: boolean
+          const: true
+        csrfToken:
+          type: string
+
+    AuthTokenResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+        data:
+          type: object
+          required: [accessToken, user]
+          properties:
+            accessToken:
+              type: string
+            user:
+              type: object
+              description: Exact user DTO pending auth service review.
+
+    SuccessWithUnspecifiedData:
+      type: object
+      required: [success, message, data]
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+        data:
+          description: Exact register payload pending auth service review.
+
+    SuccessWithoutData:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Logout successful
+
+    ErrorResponse:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+          const: false
+        message:
+          type: string
+
+    ValidationErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          required: [errors]
+          properties:
+            errors:
+              type: array
+              items:
+                type: object
+                required: [field, message]
+                properties:
+                  field:
+                    type: string
+                  message:
+                    type: string
+
+    PublicUser:
+      type: object
+      required:
+        - id
+        - name
+        - email
+      properties:
+        id:
+          type: string
+          format: uuid
+      name:
+        type: string
+      email:
+        type: string
+        format: email
+
+AuthTokenData:
+  type: object
+  required:
+    - accessToken
+    - user
+  properties:
+    accessToken:
+      type: string
+      description: JWT access token.
+    user:
+      $ref: '#/components/schemas/PublicUser'
+
+AuthTokenResponse:
+  type: object
+  required:
+    - success
+    - message
+    - data
+  properties:
+    success:
+      type: boolean
+      const: true
+    message:
+      type: string
+    data:
+      $ref: '#/components/schemas/AuthTokenData'
+
+
+  responses:
+    ValidationError:
+      description: Invalid request data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationErrorResponse'
+
+    CsrfError:
+      description: Missing or invalid CSRF token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    UnauthorizedError:
+      description: Missing or invalid refresh token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    RateLimitError:
+      description: Too many requests (body depends on rate limiting middleware)

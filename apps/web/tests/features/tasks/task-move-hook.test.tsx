@@ -84,7 +84,7 @@ describe("Tasks: optimistic move, filtered lists, rollback, isolation", () => {
         service.move.mockRejectedValueOnce(new Error("Move rejected"));
         const { result } = renderHook(() => useMoveTask(projectId), { wrapper });
 
-        await act(async () => { await expect(result.current.mutateAsync(move())).rejects.toThrow("Move rejected"); });
+        await act(async () => { await expect(result.current.mutateAsync(move())).rejects.toMatchObject({ message: "Move rejected" }); });
         await waitFor(() => expect(result.current.isError).toBe(true));
         expect(client.getQueryData(listKey)).toEqual(previousList);
         expect(client.getQueryData(todoKey)).toEqual(previousTodo);
@@ -107,7 +107,7 @@ describe("Tasks: optimistic move, filtered lists, rollback, isolation", () => {
         const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue(undefined);
         service.move.mockRejectedValueOnce(new Error("Move rejected"));
         const { result } = renderHook(() => useMoveTask(projectId), { wrapper });
-        await act(async () => { await expect(result.current.mutateAsync(move())).rejects.toThrow("Move rejected"); });
+        await act(async () => { await expect(result.current.mutateAsync(move())).rejects.toMatchObject({ message: "Move rejected" }); });
         expect(invalidate).toHaveBeenCalledWith({ queryKey: ["tasks", "list", projectId] });
         expect(invalidate).toHaveBeenCalledWith({ queryKey: detailKey });
     });

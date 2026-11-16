@@ -1,0 +1,2958 @@
+openapi: 3.1.0
+info:
+  title: DevFlow API
+  version: 1.0.0-draft
+  description: 'DevFlow REST API contract derived from the submitted route, controller, schema, service and repository sources. All 42 HTTP operations in this snapshot are represented.
+
+
+    JWT access tokens are returned in JSON; refresh tokens are stored in HttpOnly cookies. For unsafe requests obtain a CSRF token first and preserve associated cookies. Swagger UI remains read-only by application configuration. Response shapes reflect actual controller envelopes (not all successful responses have a message).
+
+
+    Some dashboard aggregate payloads are intentionally described as JSON objects because the application has no shared DTO schemas for them; see REVIEW.md for follow-up validation.
+
+    '
+servers:
+- url: /api/v1
+  description: Same-origin API (recommended for local documentation)
+tags:
+- name: System
+- name: Health
+- name: Authentication
+- name: CSRF
+- name: Users
+- name: Admin
+- name: Projects
+- name: Project Members
+- name: Tasks
+- name: Comments
+- name: Activities
+- name: Notifications
+- name: Dashboard
+paths:
+  /auth/csrf-token:
+    get:
+      tags:
+      - Authentication
+      - CSRF
+      summary: Obtain a CSRF token using the standard response envelope
+      operationId: getAuthCsrfToken
+      responses:
+        '200':
+          description: CSRF token returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrfEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /csrf/csrf-token:
+    get:
+      tags:
+      - CSRF
+      summary: Obtain a CSRF token using the legacy standalone response
+      operationId: getStandaloneCsrfToken
+      description: Existing route with a different response shape; retained for compatibility.
+      responses:
+        '200':
+          description: CSRF token returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandaloneCsrfResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /auth/register:
+    post:
+      tags:
+      - Authentication
+      summary: Register a user
+      operationId: registerUser
+      security:
+      - csrfHeader: []
+      description: The supplied CSRF token must match the session cookies established by the CSRF endpoint.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User created; does not automatically sign in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /auth/login:
+    post:
+      tags:
+      - Authentication
+      summary: Log in and obtain an access token
+      operationId: loginUser
+      security:
+      - csrfHeader: []
+      description: A successful response also sets an HttpOnly refreshToken cookie with Path=/api/v1/auth.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /auth/refresh:
+    post:
+      tags:
+      - Authentication
+      summary: Rotate the refresh token and issue a new access token
+      operationId: refreshAccessToken
+      security:
+      - refreshCookie: []
+        csrfHeader: []
+      responses:
+        '200':
+          description: Access token returned and refresh cookie rotated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /auth/logout:
+    post:
+      tags:
+      - Authentication
+      summary: Revoke the refresh token family and clear the cookie when present
+      operationId: logoutUser
+      description: The refresh cookie is optional; a missing cookie still produces a successful logout.
+      security:
+      - csrfHeader: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /:
+    get:
+      tags:
+      - System
+      summary: API root
+      operationId: get
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiRootEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /health/live:
+    get:
+      tags:
+      - Health
+      summary: Liveness probe
+      operationId: gethealthlive
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /health/ready:
+    get:
+      tags:
+      - Health
+      summary: 'Readiness probe: database and Redis'
+      operationId: gethealthready
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /users/me:
+    get:
+      tags:
+      - Users
+      summary: Get authenticated JWT claims
+      operationId: getusersme
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      security:
+      - bearerAuth: []
+  /admin/dashboard:
+    get:
+      tags:
+      - Admin
+      summary: Get admin dashboard welcome message
+      operationId: getadmindashboard
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDashboardEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      security:
+      - bearerAuth: []
+  /projects:
+    post:
+      tags:
+      - Projects
+      summary: Create project
+      operationId: postprojects
+      responses:
+        '201':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectCreateEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+      security:
+      - bearerAuth: []
+        csrfHeader: []
+    get:
+      tags:
+      - Projects
+      summary: List accessible projects
+      operationId: getprojects
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectListEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 1
+          minimum: 1
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 10
+          minimum: 1
+          maximum: 50
+      - name: search
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - PLANNING
+          - ACTIVE
+          - COMPLETED
+          - ARCHIVED
+      security:
+      - bearerAuth: []
+  /projects/{id}:
+    get:
+      tags:
+      - Projects
+      summary: Get accessible project
+      operationId: getprojectsid
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDetailEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      security:
+      - bearerAuth: []
+    patch:
+      tags:
+      - Projects
+      summary: Update project (owner or admin)
+      operationId: patchprojectsid
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectUpdateEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectRequest'
+      security:
+      - bearerAuth: []
+        csrfHeader: []
+    delete:
+      tags:
+      - Projects
+      summary: Delete project (owner only)
+      operationId: deleteprojectsid
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDeleteEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      security:
+      - bearerAuth: []
+        csrfHeader: []
+  /projects/{projectId}/members:
+    get:
+      tags:
+      - Project Members
+      summary: List project members
+      operationId: getprojectsprojectIdmembers
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMembersEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      security:
+      - bearerAuth: []
+    post:
+      tags:
+      - Project Members
+      summary: Add member to project
+      operationId: postprojectsprojectIdmembers
+      responses:
+        '201':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMemberCreateEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      description: Owner can add ADMIN or MEMBER; ADMIN can only add MEMBER.
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddProjectMemberRequest'
+      security:
+      - bearerAuth: []
+        csrfHeader: []
+  /projects/{projectId}/members/{userId}:
+    patch:
+      tags:
+      - Project Members
+      summary: Update member role (owner only)
+      operationId: patchprojectsprojectIdmembersuserId
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMemberUpdateEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectMemberRequest'
+      security:
+      - bearerAuth: []
+        csrfHeader: []
+    delete:
+      tags:
+      - Project Members
+      summary: Remove project member or leave project
+      operationId: deleteprojectsprojectIdmembersuserId
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMemberDeleteEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      description: OWNER may remove ADMIN/MEMBER; ADMIN may remove MEMBER; ADMIN/MEMBER may remove themselves. Owner cannot be removed.
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      security:
+      - bearerAuth: []
+        csrfHeader: []
+  /projects/{projectId}/tasks:
+    post:
+      tags:
+      - Tasks
+      summary: Create task
+      operationId: postprojectsprojectIdtasks
+      responses:
+        '201':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCreateEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      security:
+      - bearerAuth: []
+        csrfHeader: []
+    get:
+      tags:
+      - Tasks
+      summary: List tasks
+      operationId: getprojectsprojectIdtasks
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskListEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 1
+          minimum: 1
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 10
+          minimum: 1
+          maximum: 100
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - TODO
+          - IN_PROGRESS
+          - IN_REVIEW
+          - DONE
+      - name: priority
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - URGENT
+      - name: assigneeId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: search
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 150
+      - name: sortBy
+        in: query
+        required: false
+        schema:
+          type: string
+          default: createdAt
+          enum:
+          - createdAt
+          - updatedAt
+          - dueDate
+          - title
+      - name: sortOrder
+        in: query
+        required: false
+        schema:
+          type: string
+          default: desc
+          enum:
+          - asc
+          - desc
+      security:
+      - bearerAuth: []
+  /projects/{projectId}/tasks/{taskId}:
+    get:
+      tags:
+      - Tasks
+      summary: Get task
+      operationId: getprojectsprojectIdtaskstaskId
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDetailEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      security:
+      - bearerAuth: []
+    patch:
+      tags:
+      - Tasks
+      summary: Update task
+      operationId: patchprojectsprojectIdtaskstaskId
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskUpdateEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskRequest'
+      security:
+      - bearerAuth: []
+        csrfHeader: []
+    delete:
+      tags:
+      - Tasks
+      summary: Delete task
+      operationId: deleteprojectsprojectIdtaskstaskId
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDeleteEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      security:
+      - bearerAuth: []
+        csrfHeader: []
+  /projects/{projectId}/tasks/{taskId}/move:
+    patch:
+      tags:
+      - Tasks
+      summary: Move task in Kanban board
+      operationId: patchprojectsprojectIdtaskstaskIdmove
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskMoveEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveTaskRequest'
+      security:
+      - bearerAuth: []
+        csrfHeader: []
+  /projects/{projectId}/tasks/{taskId}/comments:
+    post:
+      tags:
+      - Comments
+      summary: Create comment with optional mentions
+      operationId: postprojectsprojectIdtaskstaskIdcomments
+      responses:
+        '201':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentCreateEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCommentRequest'
+      security:
+      - bearerAuth: []
+        csrfHeader: []
+    get:
+      tags:
+      - Comments
+      summary: List comments
+      operationId: getprojectsprojectIdtaskstaskIdcomments
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentListEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 1
+          minimum: 1
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 10
+          minimum: 1
+          maximum: 100
+      security:
+      - bearerAuth: []
+  /projects/{projectId}/tasks/{taskId}/comments/{commentId}:
+    patch:
+      tags:
+      - Comments
+      summary: Update comment
+      operationId: patchprojectsprojectIdtaskstaskIdcommentscommentId
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentUpdateEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: commentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCommentRequest'
+      security:
+      - bearerAuth: []
+        csrfHeader: []
+    delete:
+      tags:
+      - Comments
+      summary: Delete comment
+      operationId: deleteprojectsprojectIdtaskstaskIdcommentscommentId
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentDeleteEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: commentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      security:
+      - bearerAuth: []
+        csrfHeader: []
+  /projects/{projectId}/activities:
+    get:
+      tags:
+      - Activities
+      summary: List project activities
+      operationId: getprojectsprojectIdactivities
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityListEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 1
+          minimum: 1
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 10
+          minimum: 1
+          maximum: 100
+      security:
+      - bearerAuth: []
+  /projects/{projectId}/activities/tasks/{taskId}:
+    get:
+      tags:
+      - Activities
+      summary: List task activities
+      operationId: getprojectsprojectIdactivitiestaskstaskId
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityListEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 1
+          minimum: 1
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 10
+          minimum: 1
+          maximum: 100
+      security:
+      - bearerAuth: []
+  /notifications:
+    get:
+      tags:
+      - Notifications
+      summary: List own notifications
+      operationId: getnotifications
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationListEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 1
+          minimum: 1
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 10
+          minimum: 1
+          maximum: 100
+      - name: unreadOnly
+        in: query
+        required: false
+        schema:
+          type: string
+          default: 'false'
+          enum:
+          - 'true'
+          - 'false'
+      security:
+      - bearerAuth: []
+    delete:
+      tags:
+      - Notifications
+      summary: Delete all notifications
+      operationId: deletenotifications
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllNotificationsDeleteEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      security:
+      - bearerAuth: []
+        csrfHeader: []
+  /notifications/unread-count:
+    get:
+      tags:
+      - Notifications
+      summary: Get unread notification count
+      operationId: getnotificationsunreadcount
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadCountEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      security:
+      - bearerAuth: []
+  /notifications/read-all:
+    patch:
+      tags:
+      - Notifications
+      summary: Mark all notifications read
+      operationId: patchnotificationsreadall
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarkAllReadEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      security:
+      - bearerAuth: []
+        csrfHeader: []
+  /notifications/{notificationId}/read:
+    patch:
+      tags:
+      - Notifications
+      summary: Mark notification read
+      operationId: patchnotificationsnotificationIdread
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarkReadEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: notificationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      security:
+      - bearerAuth: []
+        csrfHeader: []
+  /notifications/{notificationId}:
+    delete:
+      tags:
+      - Notifications
+      summary: Delete notification
+      operationId: deletenotificationsnotificationId
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationDeleteEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      parameters:
+      - name: notificationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      security:
+      - bearerAuth: []
+        csrfHeader: []
+  /dashboard/overview:
+    get:
+      tags:
+      - Dashboard
+      summary: Dashboard overview
+      operationId: getdashboardoverview
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardOverviewEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      description: When both dates are supplied, startDate must not be after endDate.
+      parameters:
+      - name: projectId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: startDate
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: endDate
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      security:
+      - bearerAuth: []
+  /dashboard/overdue-tasks:
+    get:
+      tags:
+      - Dashboard
+      summary: Overdue tasks
+      operationId: getdashboardoverduetasks
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardOverdueEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      description: When both dates are supplied, startDate must not be after endDate.
+      parameters:
+      - name: projectId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: startDate
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: endDate
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      security:
+      - bearerAuth: []
+  /dashboard/workload:
+    get:
+      tags:
+      - Dashboard
+      summary: User workload
+      operationId: getdashboardworkload
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardWorkloadEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      description: When both dates are supplied, startDate must not be after endDate.
+      parameters:
+      - name: projectId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: startDate
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: endDate
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      security:
+      - bearerAuth: []
+  /dashboard/activities:
+    get:
+      tags:
+      - Dashboard
+      summary: Recent activities
+      operationId: getdashboardactivities
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardActivitiesEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Resource not found or inaccessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+      description: When both dates are supplied, startDate must not be after endDate.
+      parameters:
+      - name: projectId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: startDate
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: endDate
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      security:
+      - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from login or refresh for protected endpoints.
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: refreshToken
+      description: Browser-managed HttpOnly cookie; Swagger UI cannot set Cookie headers manually.
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: CSRF token from GET /auth/csrf-token plus associated browser cookies.
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+      - name
+      - email
+      - password
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 50
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Whitespace is trimmed and the value normalized to lowercase.
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
+    LoginRequest:
+      type: object
+      required:
+      - email
+      - password
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Whitespace is trimmed and the value normalized to lowercase.
+        password:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 128
+    AuthenticatedUser:
+      type: object
+      required:
+      - id
+      - name
+      - email
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+    RegisteredUser:
+      allOf:
+      - $ref: '#/components/schemas/AuthenticatedUser'
+      - type: object
+        required:
+        - createdAt
+        properties:
+          createdAt:
+            type: string
+            format: date-time
+    AuthTokenData:
+      type: object
+      required:
+      - accessToken
+      - user
+      properties:
+        accessToken:
+          type: string
+          description: Signed 15-minute JWT access token.
+        user:
+          $ref: '#/components/schemas/AuthenticatedUser'
+    AuthTokenResponse:
+      type: object
+      required:
+      - success
+      - message
+      - data
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/AuthTokenData'
+    RegisterResponse:
+      type: object
+      required:
+      - success
+      - message
+      - data
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: User registered successfully
+        data:
+          $ref: '#/components/schemas/RegisteredUser'
+    LogoutResponse:
+      type: object
+      required:
+      - success
+      - message
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Logout successful
+    CsrfEnvelope:
+      type: object
+      required:
+      - success
+      - message
+      - data
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: CSRF token generated
+        data:
+          type: object
+          required:
+          - csrfToken
+          properties:
+            csrfToken:
+              type: string
+    StandaloneCsrfResponse:
+      type: object
+      required:
+      - success
+      - csrfToken
+      properties:
+        success:
+          type: boolean
+          const: true
+        csrfToken:
+          type: string
+    ErrorResponse:
+      type: object
+      required:
+      - success
+      - message
+      properties:
+        success:
+          type: boolean
+          const: false
+        message:
+          type: string
+    ValidationErrorResponse:
+      allOf:
+      - $ref: '#/components/schemas/ErrorResponse'
+      - type: object
+        required:
+        - errors
+        properties:
+          errors:
+            type: array
+            items:
+              type: object
+              required:
+              - field
+              - message
+              properties:
+                field:
+                  type: string
+                message:
+                  type: string
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+        total:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+      required:
+      - page
+      - limit
+      - total
+      - totalPages
+    PublicUser:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+      required:
+      - id
+      - name
+      - email
+    SimpleUser:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+      required:
+      - id
+      - name
+    ProjectBase:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type:
+          - string
+          - 'null'
+        status:
+          type: string
+          enum:
+          - PLANNING
+          - ACTIVE
+          - COMPLETED
+          - ARCHIVED
+        ownerId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - name
+      - description
+      - status
+      - ownerId
+      - createdAt
+      - updatedAt
+    ProjectListItem:
+      allOf:
+      - $ref: '#/components/schemas/ProjectBase'
+      - type: object
+        properties:
+          _count:
+            type: object
+            properties:
+              members:
+                type: integer
+              tasks:
+                type: integer
+            required:
+            - members
+            - tasks
+        required:
+        - _count
+    ProjectCreate:
+      allOf:
+      - $ref: '#/components/schemas/ProjectListItem'
+      - type: object
+        properties:
+          owner:
+            $ref: '#/components/schemas/PublicUser'
+        required:
+        - owner
+    ProjectMemberBase:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum:
+          - OWNER
+          - ADMIN
+          - MEMBER
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - projectId
+      - userId
+      - role
+      - createdAt
+      - updatedAt
+    ProjectMemberWithUser:
+      allOf:
+      - $ref: '#/components/schemas/ProjectMemberBase'
+      - type: object
+        properties:
+          user:
+            $ref: '#/components/schemas/PublicUser'
+        required:
+        - user
+    ProjectDetail:
+      allOf:
+      - $ref: '#/components/schemas/ProjectBase'
+      - type: object
+        properties:
+          owner:
+            $ref: '#/components/schemas/SimpleUser'
+          members:
+            type: array
+            items:
+              $ref: '#/components/schemas/ProjectMemberWithUser'
+          _count:
+            type: object
+            properties:
+              tasks:
+                type: integer
+            required:
+            - tasks
+        required:
+        - owner
+        - members
+        - _count
+    CreateProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 1000
+      required:
+      - name
+    UpdateProjectRequest:
+      allOf:
+      - type: object
+        properties:
+          name:
+            type: string
+            minLength: 3
+            maxLength: 100
+          description:
+            type:
+            - string
+            - 'null'
+            maxLength: 1000
+          status:
+            type: string
+            enum:
+            - PLANNING
+            - ACTIVE
+            - COMPLETED
+            - ARCHIVED
+      minProperties: 1
+    AddProjectMemberRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum:
+          - ADMIN
+          - MEMBER
+          default: MEMBER
+      required:
+      - email
+    UpdateProjectMemberRequest:
+      type: object
+      properties:
+        role:
+          type: string
+          enum:
+          - ADMIN
+          - MEMBER
+      required:
+      - role
+    ProjectCreateEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Project created successfully
+        data:
+          $ref: '#/components/schemas/ProjectCreate'
+      required:
+      - success
+      - message
+      - data
+    ProjectDetailEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/ProjectDetail'
+      required:
+      - success
+      - data
+    ProjectUpdateEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Project updated successfully
+        data:
+          $ref: '#/components/schemas/ProjectDetail'
+      required:
+      - success
+      - message
+      - data
+    ProjectListEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectListItem'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+      required:
+      - success
+      - data
+      - pagination
+    ProjectDeleteEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Project deleted successfully
+      required:
+      - success
+      - message
+    ProjectMembersEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectMemberWithUser'
+      required:
+      - success
+      - data
+    ProjectMemberCreateEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Project member added successfully
+        data:
+          $ref: '#/components/schemas/ProjectMemberWithUser'
+      required:
+      - success
+      - message
+      - data
+    ProjectMemberUpdateEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Project member role updated successfully
+        data:
+          $ref: '#/components/schemas/ProjectMemberBase'
+      required:
+      - success
+      - message
+      - data
+    ProjectMemberDeleteEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Project member removed successfully
+      required:
+      - success
+      - message
+    TaskBase:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type:
+          - string
+          - 'null'
+        status:
+          type: string
+          enum:
+          - TODO
+          - IN_PROGRESS
+          - IN_REVIEW
+          - DONE
+        priority:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - URGENT
+        position:
+          type: number
+        projectId:
+          type: string
+          format: uuid
+        assigneeId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        creatorId:
+          type: string
+          format: uuid
+        dueDate:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        completedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        assignee:
+          oneOf:
+          - $ref: '#/components/schemas/PublicUser'
+          - type: 'null'
+        creator:
+          $ref: '#/components/schemas/PublicUser'
+      required:
+      - id
+      - title
+      - description
+      - status
+      - priority
+      - position
+      - projectId
+      - assigneeId
+      - creatorId
+      - dueDate
+      - completedAt
+      - createdAt
+      - updatedAt
+      - assignee
+      - creator
+    CreateTaskRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 2
+          maxLength: 150
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 5000
+        status:
+          type: string
+          enum:
+          - TODO
+          - IN_PROGRESS
+          - IN_REVIEW
+          - DONE
+        priority:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - URGENT
+        assigneeId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        dueDate:
+          type:
+          - string
+          - 'null'
+          format: date-time
+      required:
+      - title
+    UpdateTaskRequest:
+      allOf:
+      - type: object
+        properties:
+          title:
+            type: string
+            minLength: 2
+            maxLength: 150
+          description:
+            type:
+            - string
+            - 'null'
+            maxLength: 5000
+          status:
+            type: string
+            enum:
+            - TODO
+            - IN_PROGRESS
+            - IN_REVIEW
+            - DONE
+          priority:
+            type: string
+            enum:
+            - LOW
+            - MEDIUM
+            - HIGH
+            - URGENT
+          assigneeId:
+            type:
+            - string
+            - 'null'
+            format: uuid
+          dueDate:
+            type:
+            - string
+            - 'null'
+            format: date-time
+      minProperties: 1
+    MoveTaskRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - TODO
+          - IN_PROGRESS
+          - IN_REVIEW
+          - DONE
+        beforeTaskId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+      required:
+      - status
+      - beforeTaskId
+    TaskCreateEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Task created successfully
+        data:
+          $ref: '#/components/schemas/TaskBase'
+      required:
+      - success
+      - message
+      - data
+    TaskDetailEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/TaskBase'
+      required:
+      - success
+      - data
+    TaskUpdateEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Task updated successfully
+        data:
+          $ref: '#/components/schemas/TaskBase'
+      required:
+      - success
+      - message
+      - data
+    TaskMoveEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Task moved successfully
+        data:
+          $ref: '#/components/schemas/TaskBase'
+      required:
+      - success
+      - message
+      - data
+    TaskListEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskBase'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+      required:
+      - success
+      - data
+      - pagination
+    TaskDeleteEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Task deleted successfully
+      required:
+      - success
+      - message
+    Mention:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        commentId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/PublicUser'
+      required:
+      - id
+      - commentId
+      - userId
+      - createdAt
+      - user
+    Comment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        taskId:
+          type: string
+          format: uuid
+        authorId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        author:
+          $ref: '#/components/schemas/PublicUser'
+        mentions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Mention'
+      required:
+      - id
+      - content
+      - taskId
+      - authorId
+      - createdAt
+      - updatedAt
+      - author
+      - mentions
+    CreateCommentRequest:
+      type: object
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        mentionedUserIds:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            format: uuid
+          default: []
+      required:
+      - content
+    UpdateCommentRequest:
+      type: object
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 5000
+      required:
+      - content
+    CommentCreateEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Comment created successfully
+        data:
+          $ref: '#/components/schemas/Comment'
+      required:
+      - success
+      - message
+      - data
+    CommentUpdateEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Comment updated successfully
+        data:
+          $ref: '#/components/schemas/Comment'
+      required:
+      - success
+      - message
+      - data
+    CommentListEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comment'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+      required:
+      - success
+      - data
+      - pagination
+    CommentDeleteEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Comment deleted successfully
+      required:
+      - success
+      - message
+    Activity:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        action:
+          type: string
+          enum:
+          - TASK_CREATED
+          - TASK_UPDATED
+          - TASK_STATUS_CHANGED
+          - TASK_PRIORITY_CHANGED
+          - TASK_ASSIGNED
+          - TASK_DELETED
+          - COMMENT_CREATED
+          - COMMENT_UPDATED
+          - COMMENT_DELETED
+        metadata: {}
+        projectId:
+          type: string
+          format: uuid
+        actorId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        taskId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        actor:
+          oneOf:
+          - $ref: '#/components/schemas/PublicUser'
+          - type: 'null'
+        task:
+          oneOf:
+          - type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              title:
+                type: string
+              status:
+                type: string
+                enum:
+                - TODO
+                - IN_PROGRESS
+                - IN_REVIEW
+                - DONE
+            required:
+            - id
+            - title
+            - status
+          - type: 'null'
+      required:
+      - id
+      - action
+      - projectId
+      - actorId
+      - taskId
+      - createdAt
+      - actor
+      - task
+    ActivityListEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Activity'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+      required:
+      - success
+      - data
+      - pagination
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+          - TASK_ASSIGNED
+          - TASK_MENTIONED
+          - COMMENT_MENTIONED
+          - COMMENT_CREATED
+        title:
+          type: string
+        message:
+          type:
+          - string
+          - 'null'
+        userId:
+          type: string
+          format: uuid
+        actorId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        projectId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        taskId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        metadata: {}
+        readAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        actor:
+          oneOf:
+          - $ref: '#/components/schemas/PublicUser'
+          - type: 'null'
+      required:
+      - id
+      - type
+      - title
+      - message
+      - userId
+      - actorId
+      - projectId
+      - taskId
+      - readAt
+      - createdAt
+      - actor
+    NotificationListEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+      required:
+      - success
+      - data
+      - pagination
+    UnreadCountEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          properties:
+            count:
+              type: integer
+              minimum: 0
+          required:
+          - count
+      required:
+      - success
+      - data
+    BulkCount:
+      type: object
+      properties:
+        count:
+          type: integer
+          minimum: 0
+      required:
+      - count
+    MarkReadEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Notification marked as read
+      required:
+      - success
+      - message
+    MarkAllReadEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: All notifications marked as read
+        data:
+          $ref: '#/components/schemas/BulkCount'
+      required:
+      - success
+      - message
+      - data
+    NotificationDeleteEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Notification deleted successfully
+      required:
+      - success
+      - message
+    AllNotificationsDeleteEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: All notifications deleted successfully
+        data:
+          $ref: '#/components/schemas/BulkCount'
+      required:
+      - success
+      - message
+      - data
+    DashboardOverviewEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          description: Aggregate JSON response; exact fields should be locked with a DTO schema and a contract test.
+      required:
+      - success
+      - data
+    DashboardOverdueEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          description: Aggregate JSON response; exact fields should be locked with a DTO schema and a contract test.
+      required:
+      - success
+      - data
+    DashboardWorkloadEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          description: Aggregate JSON response; exact fields should be locked with a DTO schema and a contract test.
+      required:
+      - success
+      - data
+    DashboardActivitiesEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          description: Aggregate JSON response; exact fields should be locked with a DTO schema and a contract test.
+      required:
+      - success
+      - data
+    CurrentUserEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            email:
+              type: string
+              format: email
+            role:
+              type: string
+              enum:
+              - USER
+              - ADMIN
+              - MANAGER
+          required:
+          - id
+          - email
+          - role
+      required:
+      - success
+      - data
+    AdminDashboardEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: Welcome to the admin dashboard
+      required:
+      - success
+      - message
+    ApiRootEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          const: DevFlow API v1
+      required:
+      - success
+      - message
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - unavailable
+      required:
+      - status
+  responses:
+    ValidationError:
+      description: Invalid request data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationErrorResponse'
+    UnauthorizedError:
+      description: Invalid or expired credentials
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ConflictError:
+      description: Email is already registered
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    CsrfError:
+      description: Missing or invalid CSRF token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimitError:
+      description: Request rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

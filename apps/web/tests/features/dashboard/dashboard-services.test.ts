@@ -34,6 +34,6 @@ describe("Dashboard HTTP service", () => {
 
     it("propagates HTTP errors instead of returning success-shaped defaults", async () => {
         api.get.mockRejectedValue(new Error("Dashboard unavailable"));
-        await expect(dashboardService.getOverview(dashboardFilters)).rejects.toThrow("Dashboard unavailable");
+        await expect(dashboardService.getOverview(dashboardFilters)).rejects.toMatchObject({ message: "Dashboard unavailable" });
     });
 });

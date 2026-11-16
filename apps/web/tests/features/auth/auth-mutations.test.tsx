@@ -62,7 +62,7 @@ describe("useLogin", () => {
 
         await act(async () => {
             await expect(result.current.mutateAsync({ email: user.email, password: "wrong" }))
-                .rejects.toThrow("Incorrect credentials");
+                .rejects.toMatchObject({ message: "Incorrect credentials" });
         });
 
         expect(useAuthStore.getState().isAuthenticated).toBe(false);
@@ -95,7 +95,7 @@ describe("useLogout", () => {
         const { result } = renderHook(() => useLogout(), { wrapper });
 
         await act(async () => {
-            await expect(result.current.mutateAsync()).rejects.toThrow("Network disconnected");
+            await expect(result.current.mutateAsync()).rejects.toMatchObject({ message: "Network disconnected" });
         });
         expect(useAuthStore.getState().accessToken).toBeNull();
         expect(queryClient.getQueryData(["projects"])).toBeUndefined();

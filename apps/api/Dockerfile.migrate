@@ -2,10 +2,20 @@
 # Run from monorepo root: docker build -f apps/api/Dockerfile.migrate -t devflow-migrate:dev015 .
 # Separate one-off Prisma migration image, built from the SAME git revision as API and Web.
 FROM node:24-bookworm-slim
+# Prisma 7 schema-engine requires OpenSSL detection even on linux/arm64.
+# Debian Bookworm ships OpenSSL 3; install before pnpm's dependency scripts run.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace
 RUN corepack enable
 COPY . .
 RUN pnpm install --frozen-lockfile
 WORKDIR /workspace/apps/api
+# Resolve and verify Prisma's engine during IMAGE BUILD, rather than requesting
+# the engine from binaries.prisma.sh during a production migration.
+# This URL is a dummy value only used for Prisma config evaluation; no DB connects.
+RUN DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build_only \
+    pnpm exec prisma -v
 ENV NODE_ENV=production
 CMD ["pnpm", "exec", "prisma", "migrate", "deploy"]

@@ -1,0 +1,198 @@
+name: DevFlow Web CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: devflow-web-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-tests:
+    name: Web - Typecheck, Build, Unit/Component, Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      VITE_API_BASE_URL: http://127.0.0.1:3000/api/v1
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install pinned pnpm from root packageManager
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck application and frontend tests
+        run: |
+          pnpm --filter @devflow/web typecheck
+          pnpm --filter @devflow/web test:typecheck
+
+      - name: Build frontend
+        run: pnpm --filter @devflow/web build
+
+      - name: Run frontend unit/component tests and enforce coverage thresholds
+        run: pnpm --filter @devflow/web test:coverage
+
+      - name: Upload frontend coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: devflow-web-coverage
+          path: apps/web/coverage/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  browser-e2e:
+    name: E2E - Chromium + Real API + Isolated DB/Redis
+    needs: web-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    env:
+      CI: "true"
+      NODE_ENV: test
+      PORT: "3000"
+      DATABASE_URL: postgresql://devflow_test_user:devflow_ci_e2e_password@127.0.0.1:5432/devflow_test?schema=public
+      TEST_DATABASE_URL: postgresql://devflow_test_user:devflow_ci_e2e_password@127.0.0.1:5432/devflow_test?schema=public
+      REDIS_URL: redis://127.0.0.1:6380/0
+      TEST_REDIS_URL: redis://127.0.0.1:6380/0
+      JWT_SECRET: ci-e2e-only-jwt-secret-at-least-32-characters
+      CSRF_SECRET: ci-e2e-only-csrf-secret-at-least-32-characters
+      CLIENT_URL1: http://127.0.0.1:5173
+      CLIENT_URL2: http://localhost:5173
+      LOG_LEVEL: silent
+      E2E_ISOLATED_DB: confirmed
+      E2E_API_BASE_URL: http://127.0.0.1:3000/api/v1
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: devflow_test_user
+          POSTGRES_PASSWORD: devflow_ci_e2e_password
+          POSTGRES_DB: devflow_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U devflow_test_user -d devflow_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install pinned pnpm from root packageManager
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate isolated E2E service targets
+        run: |
+          node --input-type=module <<'JS'
+          const db = new URL(process.env.DATABASE_URL);
+          const redis = new URL(process.env.REDIS_URL);
+          const api = new URL(process.env.E2E_API_BASE_URL);
+          if (db.hostname !== '127.0.0.1' || db.pathname !== '/devflow_test' ||
+              process.env.DATABASE_URL !== process.env.TEST_DATABASE_URL ||
+              redis.hostname !== '127.0.0.1' || redis.port !== '6380' ||
+              process.env.REDIS_URL !== process.env.TEST_REDIS_URL ||
+              api.origin !== 'http://127.0.0.1:3000' ||
+              process.env.E2E_ISOLATED_DB !== 'confirmed') {
+            throw new Error('Unsafe CI E2E target');
+          }
+          console.log('CI-only E2E service targets verified');
+          JS
+
+      - name: Generate Prisma Client
+        working-directory: apps/api
+        run: pnpm exec prisma generate
+
+      - name: Apply migrations ONLY to CI E2E database
+        working-directory: apps/api
+        run: pnpm exec prisma migrate deploy
+
+      - name: Build API for E2E
+        run: pnpm --filter @devflow/api build
+
+      - name: Start test API and verify browser CORS
+        shell: bash
+        run: |
+          nohup pnpm --dir apps/api start > "$RUNNER_TEMP/devflow-api.log" 2>&1 < /dev/null &
+          echo $! > "$RUNNER_TEMP/devflow-api.pid"
+          ready=false
+          for attempt in {1..35}; do
+            if curl -fsS -D "$RUNNER_TEMP/devflow-cors.headers" -o /dev/null \
+              -H 'Origin: http://127.0.0.1:5173' \
+              'http://127.0.0.1:3000/api/v1/auth/csrf-token'; then
+              if tr -d '\r' < "$RUNNER_TEMP/devflow-cors.headers" | grep -qiFx 'Access-Control-Allow-Origin: http://127.0.0.1:5173'; then
+                ready=true
+                break
+              fi
+              echo 'API responded, but E2E browser origin is not allowed'
+            fi
+            sleep 1
+          done
+          if [[ "$ready" != 'true' ]]; then
+            echo 'Isolated API never became CORS-ready'
+            tail -n 100 "$RUNNER_TEMP/devflow-api.log" || true
+            exit 1
+          fi
+          echo 'Test API and browser CORS are ready'
+
+      - name: Install Chromium and OS dependencies
+        run: pnpm --filter @devflow/web exec playwright install --with-deps chromium
+
+      - name: Run all real-browser E2E scenarios
+        run: pnpm --filter @devflow/web exec playwright test --config playwright.config.ts
+
+      # Traces can include cookies and test credentials, so keep private and short-lived.
+      - name: Upload failed E2E report/traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: devflow-e2e-failure-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 3

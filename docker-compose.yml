@@ -18,7 +18,7 @@ services:
       retries: 5
   redis:
     image: redis:7-alpine
-    container_name: devflow-redis
+    container_name: devflow-redis-test
     restart: unless-stopped
     ports:
       - "127.0.0.1:6379:6379"

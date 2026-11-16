@@ -11,16 +11,21 @@ import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 
 import { validate } from "../../../src/middlewares/validate.middleware.js";
-import { AppError } from "../../../src/utils/app-error.js";
+import {
+    AppError,
+    RequestValidationError,
+} from "../../../src/utils/app-error.js";
 
 describe("Validate Middleware", () => {
     let req: Partial<Request>;
+    let res: Partial<Response>;
     let next: NextFunction;
 
     beforeEach(() => {
         req = {
             body: {},
         };
+        res = { locals: {} };
 
         next = vi.fn();
     });
@@ -40,7 +45,7 @@ describe("Validate Middleware", () => {
 
         middleware(
             req as Request,
-            {} as Response,
+            res as Response,
             next,
         );
 
@@ -51,6 +56,10 @@ describe("Validate Middleware", () => {
 
         expect(next).toHaveBeenCalledOnce();
         expect(next).toHaveBeenCalledWith();
+        expect(res.locals?.validated?.body).toEqual({
+            name: "Test User",
+            age: 25,
+        });
     });
 
     it("should replace request body with parsed data", () => {
@@ -66,13 +75,14 @@ describe("Validate Middleware", () => {
 
         middleware(
             req as Request,
-            {} as Response,
+            res as Response,
             next,
         );
 
         expect(req.body).toEqual({
             name: "Test User",
         });
+        expect(res.locals?.validated?.body).toEqual(req.body);
 
         expect(next).toHaveBeenCalledOnce();
     });
@@ -90,7 +100,7 @@ describe("Validate Middleware", () => {
 
         middleware(
             req as Request,
-            {} as Response,
+            res as Response,
             next,
         );
 
@@ -119,7 +129,7 @@ describe("Validate Middleware", () => {
 
         middleware(
             req as Request,
-            {} as Response,
+            res as Response,
             next,
         );
 
@@ -127,9 +137,14 @@ describe("Validate Middleware", () => {
 
         expect(error).toBeInstanceOf(AppError);
 
+        expect(error).toBeInstanceOf(RequestValidationError);
         expect(error).toMatchObject({
             statusCode: 400,
-            message: "Name is too short, Invalid email",
+            message: "Validation failed",
+            errors: [
+                { field: "body.name", message: "Name is too short" },
+                { field: "body.email", message: "Invalid email" },
+            ],
         });
     });
 
@@ -146,7 +161,7 @@ describe("Validate Middleware", () => {
 
         middleware(
             req as Request,
-            {} as Response,
+            res as Response,
             next,
         );
 

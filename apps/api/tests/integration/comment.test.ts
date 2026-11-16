@@ -23,6 +23,11 @@ import {
 
 import { createAuthHeader } from "../helpers/test-auth.js";
 
+import {
+    getCsrfToken,
+    createCsrfHeader,
+} from "../helpers/test-csrf.js";
+
 interface TestUser {
     id: string;
     email: string;
@@ -38,6 +43,8 @@ describe("Comment API", () => {
     let projectId: string;
     let taskId: string;
     let commentId: string;
+    let agent: SuperAgentTest;
+    let csrfToken: string;
 
     async function createUser(email: string): Promise<TestUser> {
         const user = await prisma.user.create({
@@ -85,6 +92,9 @@ describe("Comment API", () => {
     });
 
     beforeEach(async () => {
+        agent = request.agent(app);
+        csrfToken = await getCsrfToken(agent);
+
         owner = await createUser(
             `owner-${crypto.randomUUID()}@test.com`,
         );
@@ -249,11 +259,12 @@ describe("Comment API", () => {
 
     describe("POST /projects/:projectId/tasks/:taskId/comments", () => {
         it("should allow OWNER to create a comment", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments`,
                 )
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "Owner comment",
                 });
@@ -263,11 +274,12 @@ describe("Comment API", () => {
         });
 
         it("should allow ADMIN to create a comment", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments`,
                 )
                 .set(createAuthHeader(admin))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "Admin comment",
                 });
@@ -276,11 +288,12 @@ describe("Comment API", () => {
         });
 
         it("should allow MEMBER to create a comment", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments`,
                 )
                 .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "Member comment",
                 });
@@ -289,11 +302,12 @@ describe("Comment API", () => {
         });
 
         it("should prevent outsider from creating a comment", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments`,
                 )
                 .set(createAuthHeader(outsider))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "Unauthorized comment",
                 });
@@ -302,11 +316,12 @@ describe("Comment API", () => {
         });
 
         it("should reject an empty comment", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments`,
                 )
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "",
                 });
@@ -315,11 +330,12 @@ describe("Comment API", () => {
         });
 
         it("should reject a comment exceeding 5000 characters", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments`,
                 )
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "A".repeat(5001),
                 });
@@ -328,11 +344,12 @@ describe("Comment API", () => {
         });
 
         it("should reject whitespace-only comments", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments`,
                 )
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "   ",
                 });
@@ -345,11 +362,12 @@ describe("Comment API", () => {
 
     describe("PATCH /projects/:projectId/tasks/:taskId/comments/:commentId", () => {
         it("should allow comment author to update comment", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
                 )
                 .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "Updated comment",
                 });
@@ -359,11 +377,12 @@ describe("Comment API", () => {
         });
 
         it("should prevent OWNER from updating another user's comment", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
                 )
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "Unauthorized update",
                 });
@@ -372,11 +391,12 @@ describe("Comment API", () => {
         });
 
         it("should prevent ADMIN from updating another user's comment", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
                 )
                 .set(createAuthHeader(admin))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "Unauthorized update",
                 });
@@ -385,11 +405,12 @@ describe("Comment API", () => {
         });
 
         it("should reject an empty comment update", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
                 )
                 .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "",
                 });
@@ -398,11 +419,12 @@ describe("Comment API", () => {
         });
 
         it("should return 404 for a non-existing comment", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments/00000000-0000-4000-8000-000000000001`,
                 )
                 .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "Updated comment",
                 });
@@ -411,11 +433,12 @@ describe("Comment API", () => {
         });
 
         it("should reject an invalid comment ID", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments/invalid-id`,
                 )
                 .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "Updated comment",
                 });
@@ -428,11 +451,12 @@ describe("Comment API", () => {
 
     describe("DELETE /projects/:projectId/tasks/:taskId/comments/:commentId", () => {
         it("should allow comment author to delete comment", async () => {
-            const response = await request(app)
+            const response = await agent
                 .delete(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
                 )
-                .set(createAuthHeader(member));
+                .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(200);
             expect(response.body.success).toBe(true);
@@ -445,41 +469,45 @@ describe("Comment API", () => {
         });
 
         it("should prevent OWNER from deleting another user's comment", async () => {
-            const response = await request(app)
+            const response = await agent
                 .delete(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
                 )
-                .set(createAuthHeader(owner));
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(403);
         });
 
         it("should prevent ADMIN from deleting another user's comment", async () => {
-            const response = await request(app)
+            const response = await agent
                 .delete(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
                 )
-                .set(createAuthHeader(admin));
+                .set(createAuthHeader(admin))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(403);
         });
 
         it("should prevent outsider from deleting comment", async () => {
-            const response = await request(app)
+            const response = await agent
                 .delete(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
                 )
-                .set(createAuthHeader(outsider));
+                .set(createAuthHeader(outsider))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(404);
         });
 
         it("should return 404 for a non-existing comment", async () => {
-            const response = await request(app)
+            const response = await agent
                 .delete(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments/00000000-0000-4000-8000-000000000001`,
                 )
-                .set(createAuthHeader(member));
+                .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(404);
         });
@@ -489,11 +517,12 @@ describe("Comment API", () => {
 
     describe("Comment Mentions", () => {
         it("should create a comment with a mentioned user", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments`,
                 )
                 .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "Please check this task",
                     mentionedUserIds: [admin.id],
@@ -509,11 +538,12 @@ describe("Comment API", () => {
         });
 
         it("should allow mentioning multiple project members", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments`,
                 )
                 .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "Please check this task",
                     mentionedUserIds: [
@@ -527,11 +557,12 @@ describe("Comment API", () => {
         });
 
         it("should allow creating a comment without mentions", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments`,
                 )
                 .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "Regular comment",
                 });
@@ -541,11 +572,12 @@ describe("Comment API", () => {
         });
 
         it("should reject mentioning a user outside the project", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments`,
                 )
                 .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "Please check this task",
                     mentionedUserIds: [outsider.id],
@@ -555,11 +587,12 @@ describe("Comment API", () => {
         });
 
         it("should not create duplicate mentions", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments`,
                 )
                 .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "Please check this task",
                     mentionedUserIds: [
@@ -572,12 +605,100 @@ describe("Comment API", () => {
             expect(response.body.data.mentions).toHaveLength(1);
         });
 
-        it("should reject invalid mentioned user IDs", async () => {
-            const response = await request(app)
+        it("should create one notification for the mentioned project member", async () => {
+            const response = await agent
                 .post(
                     `/api/v1/projects/${projectId}/tasks/${taskId}/comments`,
                 )
                 .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
+                .send({
+                    content: "Mention notification verification",
+                    mentionedUserIds: [admin.id],
+                });
+
+            expect(response.status).toBe(201);
+
+            const notifications = await prisma.notification.findMany({
+                where: {
+                    userId: admin.id,
+                    actorId: member.id,
+                    taskId,
+                    type: "COMMENT_MENTIONED",
+                },
+            });
+
+            expect(notifications).toHaveLength(1);
+            expect(notifications[0]?.projectId).toBe(projectId);
+            expect(notifications[0]?.metadata).toMatchObject({
+                commentId: response.body.data.id,
+            });
+        });
+
+        it("should not send two notifications when a user is mentioned twice", async () => {
+            const response = await agent
+                .post(
+                    `/api/v1/projects/${projectId}/tasks/${taskId}/comments`,
+                )
+                .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
+                .send({
+                    content: "Duplicate mention notification verification",
+                    mentionedUserIds: [admin.id, admin.id],
+                });
+
+            expect(response.status).toBe(201);
+            expect(response.body.data.mentions).toHaveLength(1);
+
+            const notifications = await prisma.notification.findMany({
+                where: {
+                    userId: admin.id,
+                    actorId: member.id,
+                    taskId,
+                    type: "COMMENT_MENTIONED",
+                },
+            });
+
+            expect(notifications).toHaveLength(1);
+        });
+
+        it("should reject self-mentions without creating a comment or notification", async () => {
+            const response = await agent
+                .post(
+                    `/api/v1/projects/${projectId}/tasks/${taskId}/comments`,
+                )
+                .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
+                .send({
+                    content: "Forbidden self mention",
+                    mentionedUserIds: [member.id],
+                });
+
+            expect(response.status).toBe(400);
+
+            const comment = await prisma.comment.findFirst({
+                where: { taskId, content: "Forbidden self mention" },
+            });
+            expect(comment).toBeNull();
+
+            const notification = await prisma.notification.findFirst({
+                where: {
+                    userId: member.id,
+                    actorId: member.id,
+                    taskId,
+                    type: "COMMENT_MENTIONED",
+                },
+            });
+            expect(notification).toBeNull();
+        });
+
+        it("should reject invalid mentioned user IDs", async () => {
+            const response = await agent
+                .post(
+                    `/api/v1/projects/${projectId}/tasks/${taskId}/comments`,
+                )
+                .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     content: "Please check this task",
                     mentionedUserIds: ["invalid-id"],

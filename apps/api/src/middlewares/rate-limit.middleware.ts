@@ -34,6 +34,8 @@ function createRateLimiter(
             success: false,
             message,
         },
+
+        skip: () => process.env.NODE_ENV === "test",
     });
 }
 

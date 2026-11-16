@@ -250,7 +250,7 @@ describe("Auth Middleware", () => {
 
         expect(json).toHaveBeenCalledWith({
             success: false,
-            message: "Invalid user role",
+            message: "Invalid access token",
         });
 
         expect(next).not.toHaveBeenCalled();

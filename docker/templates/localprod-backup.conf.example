@@ -1,0 +1,6 @@
+# Copy to ~/.config/devflow/localprod-backup.conf on your Mac (NOT into Git).
+# This is trusted shell-sourced local config; never download arbitrary contents.
+# The directory must ALREADY EXIST on a separate mounted disk or network share.
+export DEVFLOW_BACKUP_DEST="/Volumes/EXTERNAL_BACKUP_DISK/DevFlow"
+# Public age recipient. Private decryption key must be kept separately/offline.
+export DEVFLOW_BACKUP_RECIPIENT="age1REPLACE_WITH_YOUR_PUBLIC_RECIPIENT"

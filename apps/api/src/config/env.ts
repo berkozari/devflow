@@ -13,6 +13,21 @@ const refreshTokenExpiresInDays = Number(
 
 const nodeEnv = process.env.NODE_ENV ?? "development";
 
+// Explicit opt-in for HTTP only on this machine's local-production reverse proxy.
+// Never enable on a publicly accessible deployment.
+const localProductionHttp = process.env.LOCAL_PRODUCTION_HTTP === "true";
+const localHttpFlag = process.env.LOCAL_PRODUCTION_HTTP;
+if (localHttpFlag && !["true", "false"].includes(localHttpFlag)) {
+    throw new Error("LOCAL_PRODUCTION_HTTP must be true or false");
+}
+if (localProductionHttp && nodeEnv !== "production") {
+    throw new Error("LOCAL_PRODUCTION_HTTP requires NODE_ENV=production");
+}
+const localAllowedOrigins = new Set([
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+]);
+
 const logLevel = process.env.LOG_LEVEL ??
     (nodeEnv === "production" ? "info" : "debug");
 
@@ -97,16 +112,23 @@ function validateClientUrl(
         throw new Error(`${name} must be a valid URL`);
     }
 
-    if (
-        nodeEnv === "production" &&
-        url.protocol !== "https:"
-    ) {
-        throw new Error(`${name} must use HTTPS in production`);
+    if (nodeEnv === "production" && url.protocol !== "https:") {
+        if (!localProductionHttp || !localAllowedOrigins.has(value)) {
+            throw new Error(`${name} must use HTTPS in production`);
+        }
     }
 }
 
 validateClientUrl(clientUrl1, "CLIENT_URL1");
 validateClientUrl(clientUrl2, "CLIENT_URL2");
+
+if (localProductionHttp && (
+    !clientUrl1 || !clientUrl2 ||
+    !localAllowedOrigins.has(clientUrl1) ||
+    !localAllowedOrigins.has(clientUrl2)
+)) {
+    throw new Error("Local production HTTP requires loopback client URLs on port 8080");
+}
 
 if (nodeEnv === "production" && (!clientUrl1 || !clientUrl2)) {
     throw new Error(
@@ -136,6 +158,7 @@ if (
 export const env = {
     port,
     nodeEnv,
+    localProductionHttp,
     logLevel,
     jwtSecret,
     csrfSecret,

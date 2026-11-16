@@ -11,6 +11,7 @@ import {
 } from "./config/csrf.js";
 
 import apiRouter from "./routes/index.js";
+import healthRouter from "./routes/health.routes.js";
 
 import { notFoundHandler } from "./middlewares/not-found.middleware.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
@@ -21,6 +22,9 @@ const app = express();
 
 app.use(requestLogger);
 app.use(helmet());
+
+// Health probes run before cookie, CSRF and application-route middleware.
+app.use("/api/v1/health", healthRouter);
 
 const allowedOrigins = [
     env.clientUrl1,

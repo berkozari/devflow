@@ -1,0 +1,137 @@
+name: DevFlow API CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-tests:
+    name: API · Typecheck · Test · Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        working-directory: apps/api
+
+    # These values are intentionally local-only CI credentials.
+    # They are NOT development or production credentials.
+    env:
+      NODE_ENV: test
+      DATABASE_URL: "postgresql://devflow_test_user:devflow_ci_test_password@127.0.0.1:5432/devflow_test?schema=public"
+      TEST_DATABASE_URL: "postgresql://devflow_test_user:devflow_ci_test_password@127.0.0.1:5432/devflow_test?schema=public"
+      REDIS_URL: "redis://127.0.0.1:6380/0"
+      TEST_REDIS_URL: "redis://127.0.0.1:6380/0"
+      JWT_SECRET: "ci-only-jwt-secret-at-least-32-characters-not-for-production"
+      CSRF_SECRET: "ci-only-csrf-secret-at-least-32-characters-not-for-production"
+      LOG_LEVEL: silent
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: devflow_test_user
+          POSTGRES_PASSWORD: devflow_ci_test_password
+          POSTGRES_DB: devflow_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U devflow_test_user -d devflow_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Resolve the monorepo's pinned pnpm version when available.
+      # Otherwise assume pnpm 10; adjust this fallback if needed.
+      - name: Determine pnpm version
+        id: pnpm-version
+        working-directory: .
+        shell: bash
+        run: |
+          if [[ -f package.json ]] && jq -e '.packageManager? | strings | startswith("pnpm@")' package.json >/dev/null; then
+            version="$(jq -r '.packageManager | split("@")[1] | split("+")[0]' package.json)"
+          else
+            version="10"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: ${{ steps.pnpm-version.outputs.version }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install workspace dependencies
+        working-directory: .
+        run: pnpm install --frozen-lockfile
+
+      # Vitest's dotenv.config({ override: true }) expects this exact file.
+      # The URL also matches the hard-coded local-only safety checks.
+      - name: Create isolated test environment
+        shell: bash
+        run: |
+          cat > .env.test <<EOF
+          NODE_ENV=test
+          DATABASE_URL=${DATABASE_URL}
+          TEST_DATABASE_URL=${TEST_DATABASE_URL}
+          REDIS_URL=${REDIS_URL}
+          TEST_REDIS_URL=${TEST_REDIS_URL}
+          JWT_SECRET=${JWT_SECRET}
+          CSRF_SECRET=${CSRF_SECRET}
+          LOG_LEVEL=${LOG_LEVEL}
+          EOF
+          chmod 600 .env.test
+
+      - name: Generate Prisma Client
+        run: pnpm exec prisma generate
+
+      - name: Apply migrations to CI test database only
+        run: pnpm exec prisma migrate deploy
+
+      - name: TypeScript typecheck
+        run: pnpm typecheck
+
+      - name: Build API
+        run: pnpm build
+
+      - name: Unit + integration tests with coverage thresholds
+        run: pnpm exec vitest run --coverage
+
+      - name: Upload HTML and LCOV coverage reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: devflow-api-coverage
+          path: apps/api/coverage/
+          if-no-files-found: ignore
+          retention-days: 7

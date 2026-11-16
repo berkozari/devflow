@@ -1,4 +1,3 @@
-
 import {
     beforeAll,
     afterAll,
@@ -100,11 +99,26 @@ describe("Project API", () => {
     });
 
     afterAll(async () => {
-        await cleanupTestData();
-        await prisma.$disconnect();
+        try {
+            await cleanupTestData();
+        } finally {
+            await prisma.$disconnect();
+        }
     });
 
     describe("POST /projects", () => {
+        it("should reject project creation without a CSRF token", async () => {
+            // agent has the CSRF session cookie; intentionally omit X-CSRF-Token.
+            const response = await agent
+                .post("/api/v1/projects")
+                .set(createAuthHeader(owner))
+                .send({
+                    name: "Project Without CSRF",
+                });
+
+            expect(response.status).toBe(403);
+        });
+
         it("should return 401 without an access token", async () => {
             const response = await agent
                 .post("/api/v1/projects")
@@ -126,11 +140,14 @@ describe("Project API", () => {
                     description: "Project description",
                 });
 
+            // Track the created row even if an assertion below fails.
+            if (typeof response.body?.data?.id === "string") {
+                trackProject(response.body.data.id);
+            }
+
             expect(response.status).toBe(201);
             expect(response.body.success).toBe(true);
             expect(response.body.data.name).toBe("New Project");
-
-            trackProject(response.body.data.id);
         });
 
         it("should automatically add the creator as OWNER", async () => {
@@ -142,9 +159,12 @@ describe("Project API", () => {
                     name: "Owner Project",
                 });
 
-            expect(response.status).toBe(201);
+            // Ensure cleanup also works if a later assertion fails.
+            if (typeof response.body?.data?.id === "string") {
+                trackProject(response.body.data.id);
+            }
 
-            trackProject(response.body.data.id);
+            expect(response.status).toBe(201);
 
             const membership = await prisma.projectMember.findUnique({
                 where: {
@@ -218,20 +238,22 @@ describe("Project API", () => {
         });
 
         it("should not return another user's projects", async () => {
-            await createTestProject(owner.id);
-            await createTestProject(outsider.id);
+            const ownProject = await createTestProject(owner.id);
+            const outsiderProject = await createTestProject(outsider.id);
 
             const response = await agent
                 .get("/api/v1/projects")
                 .set(createAuthHeader(owner));
 
             expect(response.status).toBe(200);
+            expect(Array.isArray(response.body.data)).toBe(true);
 
             const projectIds = response.body.data.map(
-                (project: { ownerId?: string }) => project.ownerId,
+                (project: { id: string }) => project.id,
             );
 
-            expect(projectIds).not.toContain(outsider.id);
+            expect(projectIds).toContain(ownProject.id);
+            expect(projectIds).not.toContain(outsiderProject.id);
         });
 
         it("should return pagination information", async () => {
@@ -263,11 +285,27 @@ describe("Project API", () => {
         });
 
         it("should filter projects by status", async () => {
+            const activeProject = await createTestProject(owner.id);
+            const planningProject = await createTestProject(owner.id);
+
+            await prisma.project.update({
+                where: { id: activeProject.id },
+                data: { status: "ACTIVE" },
+            });
+
             const response = await agent
                 .get("/api/v1/projects?status=ACTIVE")
                 .set(createAuthHeader(owner));
 
             expect(response.status).toBe(200);
+            expect(Array.isArray(response.body.data)).toBe(true);
+
+            const projectIds = response.body.data.map(
+                (project: { id: string }) => project.id,
+            );
+
+            expect(projectIds).toContain(activeProject.id);
+            expect(projectIds).not.toContain(planningProject.id);
 
             expect(
                 response.body.data.every(

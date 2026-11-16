@@ -113,7 +113,7 @@ describe("Project Member Service", () => {
             role: "ADMIN",
         });
 
-        deleteMember.mockResolvedValue(targetMembership);
+        deleteMember.mockResolvedValue({ count: 1 });
     });
 
     describe("findMembers", () => {
@@ -395,6 +395,7 @@ describe("Project Member Service", () => {
             expect(deleteMember).toHaveBeenCalledWith(
                 projectId,
                 memberId,
+                ["ADMIN", "MEMBER"],
             );
         });
 

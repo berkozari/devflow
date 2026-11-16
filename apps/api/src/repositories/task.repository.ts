@@ -231,7 +231,7 @@ export const taskRepository = {
                 ${item.id}::uuid,
                 ${item.status}::"TaskStatus",
                 ${item.position}::double precision,
-                ${item.completedAt !== undefined},
+                ${item.completedAt !== undefined}::boolean,
                 ${item.completedAt ?? null}::timestamp
             )`,
         );

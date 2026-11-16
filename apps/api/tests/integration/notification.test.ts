@@ -23,6 +23,11 @@ import {
 
 import { createAuthHeader } from "../helpers/test-auth.js";
 
+import {
+    getCsrfToken,
+    createCsrfHeader,
+} from "../helpers/test-csrf.js";
+
 interface TestUser {
     id: string;
     email: string;
@@ -32,6 +37,9 @@ interface TestUser {
 const BASE_URL = "/api/v1/notifications";
 
 describe("Notification API", () => {
+    let agent: SuperAgentTest;
+    let csrfToken: string;
+
     let owner: TestUser;
     let outsider: TestUser;
 
@@ -78,6 +86,9 @@ describe("Notification API", () => {
     });
 
     beforeEach(async () => {
+        agent = request.agent(app);
+        csrfToken = await getCsrfToken(agent);
+
         owner = await createUser(
             `owner-${crypto.randomUUID()}@test.com`,
         );
@@ -253,9 +264,10 @@ describe("Notification API", () => {
         it("should mark notification as read", async () => {
             const notification = await createNotification(owner.id);
 
-            const response = await request(app)
+            const response = await agent
                 .patch(`${BASE_URL}/${notification.id}/read`)
-                .set(createAuthHeader(owner));
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(200);
 
@@ -269,11 +281,12 @@ describe("Notification API", () => {
         });
 
         it("should return 404 for a non-existing notification", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(
                     `${BASE_URL}/${crypto.randomUUID()}/read`,
                 )
-                .set(createAuthHeader(owner));
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(404);
         });
@@ -281,9 +294,10 @@ describe("Notification API", () => {
         it("should prevent users from marking another user's notification as read", async () => {
             const notification = await createNotification(outsider.id);
 
-            const response = await request(app)
+            const response = await agent
                 .patch(`${BASE_URL}/${notification.id}/read`)
-                .set(createAuthHeader(owner));
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(404);
 
@@ -297,9 +311,10 @@ describe("Notification API", () => {
         });
 
         it("should reject an invalid notification ID", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(`${BASE_URL}/invalid-id/read`)
-                .set(createAuthHeader(owner));
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(400);
         });
@@ -313,9 +328,10 @@ describe("Notification API", () => {
             await createNotification(owner.id);
             await createNotification(owner.id);
 
-            const response = await request(app)
+            const response = await agent
                 .patch(`${BASE_URL}/read-all`)
-                .set(createAuthHeader(owner));
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(200);
 
@@ -333,9 +349,10 @@ describe("Notification API", () => {
             await createNotification(owner.id);
             const outsiderNotification = await createNotification(outsider.id);
 
-            const response = await request(app)
+            const response = await agent
                 .patch(`${BASE_URL}/read-all`)
-                .set(createAuthHeader(owner));
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(200);
 
@@ -355,9 +372,10 @@ describe("Notification API", () => {
         it("should delete user's notification", async () => {
             const notification = await createNotification(owner.id);
 
-            const response = await request(app)
+            const response = await agent
                 .delete(`${BASE_URL}/${notification.id}`)
-                .set(createAuthHeader(owner));
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(200);
 
@@ -371,11 +389,12 @@ describe("Notification API", () => {
         });
 
         it("should return 404 for a non-existing notification", async () => {
-            const response = await request(app)
+            const response = await agent
                 .delete(
                     `${BASE_URL}/${crypto.randomUUID()}`,
                 )
-                .set(createAuthHeader(owner));
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(404);
         });
@@ -383,9 +402,10 @@ describe("Notification API", () => {
         it("should prevent users from deleting another user's notification", async () => {
             const notification = await createNotification(outsider.id);
 
-            const response = await request(app)
+            const response = await agent
                 .delete(`${BASE_URL}/${notification.id}`)
-                .set(createAuthHeader(owner));
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(404);
 
@@ -399,9 +419,10 @@ describe("Notification API", () => {
         });
 
         it("should reject an invalid notification ID", async () => {
-            const response = await request(app)
+            const response = await agent
                 .delete(`${BASE_URL}/invalid-id`)
-                .set(createAuthHeader(owner));
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(400);
         });
@@ -415,9 +436,10 @@ describe("Notification API", () => {
             await createNotification(owner.id);
             await createNotification(owner.id);
 
-            const response = await request(app)
+            const response = await agent
                 .delete(BASE_URL)
-                .set(createAuthHeader(owner));
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(200);
 
@@ -434,9 +456,10 @@ describe("Notification API", () => {
             await createNotification(owner.id);
             const outsiderNotification = await createNotification(outsider.id);
 
-            const response = await request(app)
+            const response = await agent
                 .delete(BASE_URL)
-                .set(createAuthHeader(owner));
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(200);
 

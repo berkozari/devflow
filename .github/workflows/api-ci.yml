@@ -1,0 +1,139 @@
+name: DevFlow API CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: devflow-api-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-tests:
+    name: API - Build, Typecheck, Unit/Integration, Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        working-directory: apps/api
+
+    env:
+      CI: "true"
+      NODE_ENV: test
+      PORT: "3000"
+      DATABASE_URL: postgresql://devflow_test_user:devflow_ci_test_password@127.0.0.1:5432/devflow_test?schema=public
+      TEST_DATABASE_URL: postgresql://devflow_test_user:devflow_ci_test_password@127.0.0.1:5432/devflow_test?schema=public
+      REDIS_URL: redis://127.0.0.1:6380/0
+      TEST_REDIS_URL: redis://127.0.0.1:6380/0
+      JWT_SECRET: ci-only-jwt-secret-at-least-32-characters-not-for-production
+      CSRF_SECRET: ci-only-csrf-secret-at-least-32-characters-not-for-production
+      CLIENT_URL1: http://127.0.0.1:5173
+      CLIENT_URL2: http://localhost:5173
+      LOG_LEVEL: silent
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: devflow_test_user
+          POSTGRES_PASSWORD: devflow_ci_test_password
+          POSTGRES_DB: devflow_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U devflow_test_user -d devflow_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install pinned pnpm from root packageManager
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install workspace dependencies
+        working-directory: .
+        run: pnpm install --frozen-lockfile
+
+      # The Vitest config intentionally refuses to load normal .env files.
+      # CI-only credentials exist exclusively in this ephemeral job.
+      - name: Create isolated API test environment
+        run: |
+          cat > .env.test <<EOF
+          NODE_ENV=${NODE_ENV}
+          PORT=${PORT}
+          DATABASE_URL=${DATABASE_URL}
+          TEST_DATABASE_URL=${TEST_DATABASE_URL}
+          REDIS_URL=${REDIS_URL}
+          TEST_REDIS_URL=${TEST_REDIS_URL}
+          JWT_SECRET=${JWT_SECRET}
+          CSRF_SECRET=${CSRF_SECRET}
+          CLIENT_URL1=${CLIENT_URL1}
+          CLIENT_URL2=${CLIENT_URL2}
+          LOG_LEVEL=${LOG_LEVEL}
+          EOF
+          chmod 600 .env.test
+
+      - name: Validate isolated database and Redis destinations
+        run: |
+          node --input-type=module <<'JS'
+          const db = new URL(process.env.DATABASE_URL);
+          const redis = new URL(process.env.REDIS_URL);
+          if (db.hostname !== '127.0.0.1' || db.pathname !== '/devflow_test' ||
+              process.env.DATABASE_URL !== process.env.TEST_DATABASE_URL ||
+              redis.hostname !== '127.0.0.1' || redis.port !== '6380' ||
+              process.env.REDIS_URL !== process.env.TEST_REDIS_URL) {
+            throw new Error('Unsafe CI API test service target');
+          }
+          console.log('CI-only API database and Redis targets verified');
+          JS
+
+      - name: Generate Prisma Client
+        run: pnpm exec prisma generate
+
+      - name: Apply committed migrations to CI test database
+        run: pnpm exec prisma migrate deploy
+
+      - name: API typecheck
+        run: pnpm typecheck
+
+      - name: API build
+        run: pnpm build
+
+      - name: API unit and integration tests with coverage enforcement
+        run: pnpm exec vitest run --coverage
+
+      - name: Upload API coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: devflow-api-coverage
+          path: apps/api/coverage/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -9,6 +9,13 @@ import {
 
 import type { Request, Response } from "express";
 
+import * as authController from "../../../src/controllers/auth.controller.js";
+
+import {
+    refreshCookieOptions,
+    refreshCookieClearOptions,
+} from "../../../src/config/cookie.js";
+
 const {
     register,
     login,
@@ -29,9 +36,6 @@ vi.mock("../../../src/services/auth.service.js", () => ({
         logout,
     },
 }));
-
-import * as authController from "../../../src/controllers/auth.controller.js";
-import { refreshCookieOptions } from "../../../src/config/cookie.js";
 
 const USER = {
     id: "user-uuid",
@@ -64,6 +68,7 @@ function createMocks() {
         json: vi.fn().mockReturnThis(),
         cookie: vi.fn().mockReturnThis(),
         clearCookie: vi.fn().mockReturnThis(),
+        setHeader: vi.fn().mockReturnThis(),
     } as unknown as Response;
 
     return { req, res };
@@ -85,6 +90,10 @@ describe("Auth Controller", () => {
             await authController.register(req, res, vi.fn());
 
             expect(register).toHaveBeenCalledWith(registerInput);
+
+            expect(res.setHeader).toHaveBeenCalledWith(
+                "Cache-Control", "no-store",
+            );
 
             expect(res.status).toHaveBeenCalledWith(201);
 
@@ -116,6 +125,10 @@ describe("Auth Controller", () => {
                 "refreshToken",
                 REFRESH_TOKEN,
                 refreshCookieOptions,
+            );
+
+            expect(res.setHeader).toHaveBeenCalledWith(
+                "Cache-Control", "no-store",
             );
 
             expect(res.status).toHaveBeenCalledWith(200);
@@ -172,6 +185,10 @@ describe("Auth Controller", () => {
                 refreshCookieOptions,
             );
 
+            expect(res.setHeader).toHaveBeenCalledWith(
+                "Cache-Control", "no-store",
+            );
+
             expect(res.status).toHaveBeenCalledWith(200);
 
             expect(res.json).toHaveBeenCalledWith({
@@ -201,7 +218,11 @@ describe("Auth Controller", () => {
 
             expect(res.clearCookie).toHaveBeenCalledWith(
                 "refreshToken",
-                refreshCookieOptions,
+                refreshCookieClearOptions,
+            );
+
+            expect(res.setHeader).toHaveBeenCalledWith(
+                "Cache-Control", "no-store",
             );
 
             expect(res.status).toHaveBeenCalledWith(200);
@@ -225,7 +246,10 @@ describe("Auth Controller", () => {
 
             expect(res.clearCookie).toHaveBeenCalledWith(
                 "refreshToken",
-                refreshCookieOptions,
+                refreshCookieClearOptions,
+            );
+            expect(res.setHeader).toHaveBeenCalledWith(
+                "Cache-Control", "no-store",
             );
         });
     });

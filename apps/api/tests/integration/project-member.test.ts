@@ -396,6 +396,8 @@ describe("Project Member API", () => {
         it("should reject an invalid email", async () => {
             const response = await agent
                 .post(`/api/v1/projects/${projectId}/members`)
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     email: "invalid-email",
                 });
@@ -406,6 +408,8 @@ describe("Project Member API", () => {
         it("should reject an empty email", async () => {
             const response = await agent
                 .post(`/api/v1/projects/${projectId}/members`)
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     email: "",
                 });
@@ -416,6 +420,8 @@ describe("Project Member API", () => {
         it("should return 404 when the user does not exist", async () => {
             const response = await agent
                 .post(`/api/v1/projects/${projectId}/members`)
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     email: `nonexistent-${crypto.randomUUID()}@test.com`,
                 });
@@ -426,6 +432,8 @@ describe("Project Member API", () => {
         it("should reject an invalid project role", async () => {
             const response = await agent
                 .post(`/api/v1/projects/${projectId}/members`)
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     email: target.email,
                     role: "SUPER_ADMIN",
@@ -443,6 +451,8 @@ describe("Project Member API", () => {
                 .patch(
                     `/api/v1/projects/${projectId}/members/${member.id}`,
                 )
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     role: "ADMIN",
                 });
@@ -452,12 +462,12 @@ describe("Project Member API", () => {
         });
 
         it("should prevent ADMIN from changing member roles", async () => {
-            await agent.setUser(admin);
-
             const response = await agent
                 .patch(
                     `/api/v1/projects/${projectId}/members/${member.id}`,
                 )
+                .set(createAuthHeader(admin))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     role: "ADMIN",
                 });
@@ -470,6 +480,8 @@ describe("Project Member API", () => {
                 .patch(
                     `/api/v1/projects/${projectId}/members/${owner.id}`,
                 )
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     role: "ADMIN",
                 });
@@ -482,6 +494,8 @@ describe("Project Member API", () => {
                 .patch(
                     `/api/v1/projects/${projectId}/members/invalid-id`,
                 )
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     role: "ADMIN",
                 });
@@ -494,6 +508,8 @@ describe("Project Member API", () => {
                 .patch(
                     `/api/v1/projects/${projectId}/members/${member.id}`,
                 )
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({});
 
             expect(response.status).toBe(400);
@@ -504,6 +520,8 @@ describe("Project Member API", () => {
                 .patch(
                     `/api/v1/projects/${projectId}/members/${member.id}`,
                 )
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     role: "OWNER",
                 });
@@ -516,6 +534,8 @@ describe("Project Member API", () => {
                 .patch(
                     `/api/v1/projects/${projectId}/members/${target.id}`,
                 )
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     role: "ADMIN",
                 });
@@ -531,7 +551,9 @@ describe("Project Member API", () => {
             const response = await agent
                 .delete(
                     `/api/v1/projects/${projectId}/members/${member.id}`,
-                );
+                )
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(200);
             expect(response.body.success).toBe(true);
@@ -549,21 +571,64 @@ describe("Project Member API", () => {
         });
 
         it("should prevent ADMIN from removing another ADMIN", async () => {
-            await agent.setUser(admin);
+            await prisma.projectMember.create({
+                data: {
+                    projectId,
+                    userId: target.id,
+                    role: "ADMIN",
+                },
+            });
+
+            const actorMembership = await prisma.projectMember.findUnique({
+                where: {
+                    projectId_userId: {
+                        projectId,
+                        userId: admin.id,
+                    },
+                },
+            });
+
+            const targetMembership = await prisma.projectMember.findUnique({
+                where: {
+                    projectId_userId: {
+                        projectId,
+                        userId: target.id,
+                    },
+                },
+            });
+
+            expect(admin.id).not.toBe(target.id);
+            expect(actorMembership?.role).toBe("ADMIN");
+            expect(targetMembership?.role).toBe("ADMIN");
 
             const response = await agent
                 .delete(
-                    `/api/v1/projects/${projectId}/members/${admin.id}`,
-                );
+                    `/api/v1/projects/${projectId}/members/${target.id}`,
+                )
+                .set(createAuthHeader(admin))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(403);
+
+            const membershipAfter = await prisma.projectMember.findUnique({
+                where: {
+                    projectId_userId: {
+                        projectId,
+                        userId: target.id,
+                    },
+                },
+            });
+
+            expect(membershipAfter?.role).toBe("ADMIN");
         });
 
         it("should prevent removing the project OWNER", async () => {
             const response = await agent
                 .delete(
                     `/api/v1/projects/${projectId}/members/${owner.id}`,
-                );
+                )
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(403);
         });
@@ -572,7 +637,9 @@ describe("Project Member API", () => {
             const response = await agent
                 .delete(
                     `/api/v1/projects/${projectId}/members/invalid-id`,
-                );
+                )
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(400);
         });
@@ -581,7 +648,9 @@ describe("Project Member API", () => {
             const response = await agent
                 .delete(
                     `/api/v1/projects/${projectId}/members/${target.id}`,
-                );
+                )
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(404);
         });

@@ -52,9 +52,23 @@ describe("Database Configuration", () => {
         expect(PrismaClientMock).not.toHaveBeenCalled();
     });
 
-    it("should initialize Prisma with PostgreSQL adapter", async () => {
+    it("should block a development database in test mode", async () => {
         process.env.DATABASE_URL =
-            "postgresql://test:test@localhost:5432/test";
+            "postgresql://user:password@localhost:5432/devflow";
+
+        await expect(
+            import("../../../src/config/database.js"),
+        ).rejects.toThrow("Test DATABASE_URL must match TEST_DATABASE_URL");
+
+        expect(PrismaPgMock).not.toHaveBeenCalled();
+        expect(PrismaClientMock).not.toHaveBeenCalled();
+    });
+
+    it("should initialize Prisma with PostgreSQL adapter", async () => {
+        // Use the configured, validated test DB URL, never an arbitrary URL.
+        process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+
+        expect(process.env.DATABASE_URL).toBeTruthy();
 
         const mockAdapter = { adapter: true };
         const mockPrisma = { prisma: true };

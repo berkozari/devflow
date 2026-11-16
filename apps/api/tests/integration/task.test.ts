@@ -22,6 +22,11 @@ import {
 
 import { createAuthHeader } from "../helpers/test-auth.js";
 
+import {
+    getCsrfToken,
+    createCsrfHeader,
+} from "../helpers/test-csrf.js";
+
 interface TestUser {
     id: string;
     name: string;
@@ -36,6 +41,8 @@ describe("Task API", () => {
     let outsider: TestUser;
     let projectId: string;
     let taskId: string;
+    let agent: SuperAgentTest;
+    let csrfToken: string;
 
     async function createUser(
         email: string,
@@ -99,6 +106,10 @@ describe("Task API", () => {
     });
 
     beforeEach(async () => {
+        agent = request.agent(app);
+
+        csrfToken = await getCsrfToken(agent);
+
         owner = await createUser(
             `owner-${crypto.randomUUID()}@test.com`,
         );
@@ -167,9 +178,10 @@ describe("Task API", () => {
 
     describe("POST /projects/:projectId/tasks", () => {
         it("should allow OWNER to create a task", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/tasks`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     title: "New Task",
                     description: "Task description",
@@ -182,9 +194,10 @@ describe("Task API", () => {
         });
 
         it("should allow ADMIN to create a task", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/tasks`)
                 .set(createAuthHeader(admin))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     title: "Admin Task",
                 });
@@ -193,9 +206,10 @@ describe("Task API", () => {
         });
 
         it("should prevent MEMBER from creating a task", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/tasks`)
                 .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     title: "Member Task",
                 });
@@ -204,9 +218,10 @@ describe("Task API", () => {
         });
 
         it("should prevent outsider from creating a task", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/tasks`)
                 .set(createAuthHeader(outsider))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     title: "Outsider Task",
                 });
@@ -215,9 +230,10 @@ describe("Task API", () => {
         });
 
         it("should reject a title shorter than 2 characters", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/tasks`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     title: "A",
                 });
@@ -226,9 +242,10 @@ describe("Task API", () => {
         });
 
         it("should reject an invalid priority", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/tasks`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     title: "Invalid Priority Task",
                     priority: "SUPER_HIGH",
@@ -238,9 +255,10 @@ describe("Task API", () => {
         });
 
         it("should reject an invalid assignee ID", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/tasks`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     title: "Invalid Assignee Task",
                     assigneeId: "invalid-id",
@@ -250,9 +268,10 @@ describe("Task API", () => {
         });
 
         it("should reject an assignee outside the project", async () => {
-            const response = await request(app)
+            const response = await agent
                 .post(`/api/v1/projects/${projectId}/tasks`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     title: "Invalid Assignee Task",
                     assigneeId: outsider.id,
@@ -393,9 +412,10 @@ describe("Task API", () => {
 
     describe("PATCH /projects/:projectId/tasks/:taskId", () => {
         it("should allow OWNER to update a task", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(`/api/v1/projects/${projectId}/tasks/${taskId}`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     title: "Updated Task",
                 });
@@ -405,9 +425,10 @@ describe("Task API", () => {
         });
 
         it("should allow ADMIN to update a task", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(`/api/v1/projects/${projectId}/tasks/${taskId}`)
                 .set(createAuthHeader(admin))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     priority: "HIGH",
                 });
@@ -416,9 +437,10 @@ describe("Task API", () => {
         });
 
         it("should allow MEMBER assignee to update task status", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(`/api/v1/projects/${projectId}/tasks/${taskId}`)
                 .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     status: "IN_PROGRESS",
                 });
@@ -428,9 +450,10 @@ describe("Task API", () => {
         });
 
         it("should prevent MEMBER from changing task title", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(`/api/v1/projects/${projectId}/tasks/${taskId}`)
                 .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     title: "Unauthorized Update",
                 });
@@ -439,9 +462,10 @@ describe("Task API", () => {
         });
 
         it("should prevent outsider from updating a task", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(`/api/v1/projects/${projectId}/tasks/${taskId}`)
                 .set(createAuthHeader(outsider))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     title: "Unauthorized Update",
                 });
@@ -450,18 +474,20 @@ describe("Task API", () => {
         });
 
         it("should reject an empty update body", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(`/api/v1/projects/${projectId}/tasks/${taskId}`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({});
 
             expect(response.status).toBe(400);
         });
 
         it("should reject an invalid task status", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(`/api/v1/projects/${projectId}/tasks/${taskId}`)
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     status: "INVALID_STATUS",
                 });
@@ -470,11 +496,12 @@ describe("Task API", () => {
         });
 
         it("should return 404 for a non-existing task", async () => {
-            const response = await request(app)
+            const response = await agent
                 .patch(
                     `/api/v1/projects/${projectId}/tasks/${crypto.randomUUID()}`,
                 )
                 .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken))
                 .send({
                     title: "Updated Task",
                 });
@@ -487,9 +514,10 @@ describe("Task API", () => {
 
     describe("DELETE /projects/:projectId/tasks/:taskId", () => {
         it("should allow OWNER to delete a task", async () => {
-            const response = await request(app)
+            const response = await agent
                 .delete(`/api/v1/projects/${projectId}/tasks/${taskId}`)
-                .set(createAuthHeader(owner));
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(200);
             expect(response.body.success).toBe(true);
@@ -504,35 +532,39 @@ describe("Task API", () => {
         it("should allow ADMIN to delete a task", async () => {
             const task = await createTask(owner.id, projectId);
 
-            const response = await request(app)
+            const response = await agent
                 .delete(`/api/v1/projects/${projectId}/tasks/${task.id}`)
-                .set(createAuthHeader(admin));
+                .set(createAuthHeader(admin))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(200);
         });
 
         it("should prevent MEMBER from deleting a task", async () => {
-            const response = await request(app)
+            const response = await agent
                 .delete(`/api/v1/projects/${projectId}/tasks/${taskId}`)
-                .set(createAuthHeader(member));
+                .set(createAuthHeader(member))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(403);
         });
 
         it("should prevent outsider from deleting a task", async () => {
-            const response = await request(app)
+            const response = await agent
                 .delete(`/api/v1/projects/${projectId}/tasks/${taskId}`)
-                .set(createAuthHeader(outsider));
+                .set(createAuthHeader(outsider))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(404);
         });
 
         it("should return 404 for a non-existing task", async () => {
-            const response = await request(app)
+            const response = await agent
                 .delete(
                     `/api/v1/projects/${projectId}/tasks/${crypto.randomUUID()}`,
                 )
-                .set(createAuthHeader(owner));
+                .set(createAuthHeader(owner))
+                .set(createCsrfHeader(csrfToken));
 
             expect(response.status).toBe(404);
         });

@@ -105,19 +105,18 @@ describe("Error Middleware", () => {
         expect(json).toHaveBeenCalledWith({
             success: false,
             message: "Validation failed",
-            errors: error.issues,
+            errors: error.issues.map((issue) => ({
+                field: issue.path.map(String).join("."),
+                message: issue.message,
+            })),
         });
 
         expect(loggerSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 requestId: "test-request-id",
-                issues: expect.arrayContaining([
-                    expect.objectContaining({
-                        path: ["email"],
-                    }),
-                ]),
+                fields: ["email"],
             }),
-            "Request validation failed",
+            "Zod validation failed",
         );
 
         expect(next).not.toHaveBeenCalled();
@@ -161,12 +160,16 @@ describe("Error Middleware", () => {
         executeMiddleware(error);
 
         expect(status).toHaveBeenCalledWith(500);
+        expect(json).toHaveBeenCalledWith({
+            success: false,
+            message: "Internal server error",
+        });
 
         expect(loggerSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 statusCode: 500,
             }),
-            "Internal application error",
+            "Application error",
         );
     });
 

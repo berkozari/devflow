@@ -147,6 +147,7 @@ export const errorHandler: ErrorRequestHandler = (
         const statusCode = error.statusCode;
 
         if (statusCode >= 500) {
+
             logger.error(
                 {
                     ...context,

@@ -1,129 +1,210 @@
-# DevFlow · DEV-014 — GitHub Actions CI and coverage gates
+# DevFlow
 
-Bu paket DEV-014'ün **CI hazırlık** aşamasıdır. Yeni unit/E2E testleri içermez. Kullanıcının yerel ortamında beş Playwright E2E testi başarılıdır; **bu workflow'ların GitHub üzerinde çalıştırıldığı henüz doğrulanmadı**.
+**DevFlow** is a full-stack project management application built as a portfolio and learning project, with an emphasis on maintainable architecture, secure API development, and modern React workflows.
 
-## Dosyalar
+It brings project management, team membership, task tracking, Kanban workflows, and progress insights into one application. DevFlow does **not** use a separate Workspace domain model.
 
-| Yol | Eylem |
+> **Project status:** Local-first portfolio application. The Docker-based local-production stack and core user workflows have been successfully smoke-tested by the project author. No publicly hosted demo is planned at this stage; GitHub `v1.0.0` release preparation is ongoing.
+
+## Features
+
+- **Authentication:** Registration, sign-in and sign-out, JWT-based access tokens, refresh-token flows, protected routes, and CSRF protection.
+- **Projects:** Create, browse, edit, and delete projects.
+- **Project membership:** Invite existing users by email, manage `OWNER` / `ADMIN` / `MEMBER` permissions, and leave or remove members according to role rules.
+- **Tasks and Kanban:** Create, update, filter, assign, and move tasks across workflow stages.
+- **Dashboard:** Project summaries, workload insights, overdue tasks, and activity information.
+- **Collaboration:** Comments, task activity history, mentions, and notifications.
+- **API documentation:** OpenAPI specification and Swagger UI in the development environment.
+
+## Screenshots
+
+### Dashboard
+
+![DevFlow dashboard](docs/screenshots/dashboard.png)
+
+### Projects
+
+![DevFlow projects page](docs/screenshots/projects.png)
+
+### Kanban Board
+
+![DevFlow Kanban board](docs/screenshots/kanban-board.png)
+
+### Task Details
+
+![DevFlow task details](docs/screenshots/task-details.png)
+
+### Project Members
+
+![DevFlow add project member dialog](docs/screenshots/project-members.png)
+
+> Screenshots show the locally running application. The Project Members image depicts the **add-member dialog**, not a full membership administration view.
+
+## Tech Stack
+
+| Area | Technologies |
 | --- | --- |
-| `.github/workflows/api-ci.yml` | Önceki API CI dosyasının güncellenmiş sürümü; varsa değiştirecek |
-| `.github/workflows/web-ci.yml` | **Yeni** frontend + gerçek E2E CI workflow'u |
-| `apps/api/vitest.config.ts` | Bilinen son API Vitest config + threshold; varsa değiştirecek |
-| `apps/web/vitest.config.ts` | Bilinen son frontend Vitest config + threshold + lcov; varsa değiştirecek |
+| Frontend | React, TypeScript, Vite |
+| UI | Tailwind CSS, shadcn/ui, Lucide icons |
+| Routing | React Router |
+| Server state | TanStack Query |
+| Client state | Zustand, where shared client state is needed |
+| Forms and validation | React Hook Form, Zod |
+| Backend | Node.js, Express, TypeScript |
+| Database and ORM | PostgreSQL, Prisma |
+| Cache and infrastructure | Redis, Docker, Nginx |
+| Authentication and security | JWT, refresh-token cookies, CSRF protection, rate limiting, Helmet |
+| API documentation | OpenAPI 3.1, Swagger UI |
+| Testing | Vitest, React Testing Library, Supertest, Playwright |
+| Automation | pnpm workspaces, GitHub Actions, GHCR image publishing |
 
-**Önemli:** Dosyalar, önceki sohbetlerde paylaşılan kaynakların son bilinen sürümlerinden hazırlandı. Bunlar canlı çalışma ağacının (`git status`) kopyası değildir. `unzip -o` kullanmadan önce mevcut config'leri mutlaka karşılaştır.
+## Architecture
 
-## 1. Kurulum: önce diff
+DevFlow is a modular monolith with a feature-oriented frontend and a layered backend. HTTP handlers, business rules, and persistence responsibilities are separated.
 
-Monorepo kökünde:
-
-```bash
-mkdir -p /tmp/devflow-ci-review
-unzip ~/Downloads/devflow-dev014-ci-final.zip -d /tmp/devflow-ci-review
-
-# Var olan dosyalarla değişiklikleri kontrol et
-for file in \
-  .github/workflows/api-ci.yml \
-  .github/workflows/web-ci.yml \
-  apps/api/vitest.config.ts \
-  apps/web/vitest.config.ts; do
-  if [[ -f "$file" ]]; then
-    diff -u "$file" "/tmp/devflow-ci-review/$file" || true
-  fi
-done
+```mermaid
+flowchart TB
+    U[User] --> WEB[React + TypeScript]
+    WEB --> R[React Router]
+    WEB --> Q[TanStack Query]
+    Q --> API[Express REST API]
+    API --> MW[Authentication / CSRF / Validation]
+    MW --> CTRL[Controllers]
+    CTRL --> SVC[Services]
+    SVC --> REPO[Repositories]
+    REPO --> ORM[Prisma]
+    ORM --> PG[(PostgreSQL)]
+    API --> REDIS[(Redis)]
+    MW -. errors .-> ERR[Central error handler]
+    CTRL -. errors .-> ERR
 ```
 
-Kontrol ettikten sonra:
+**Design principles:**
 
-```bash
-unzip -o ~/Downloads/devflow-dev014-ci-final.zip -d .
+- Keep controllers focused on request and response handling.
+- Put business rules and resource-level authorization in services.
+- Use repositories for database access without adding unnecessary abstractions.
+- Use TanStack Query for server state, Zustand for genuinely shared client state, and React Hook Form for form state.
+- Prefer a testable modular monolith to premature microservices.
+
+See [Architecture](docs/architecture.md) and [Technical Decisions](docs/technical-decisions.md) for more detail.
+
+## Data Model
+
+Core models include `User`, `Project`, `ProjectMember`, `Task`, `Comment`, and `ActivityLog`, alongside `Mention`, `Notification`, and `RefreshToken`. Project ownership is associated with the project owner, while project membership defines collaboration roles.
+
+See the [Database Documentation](docs/database.md) for the ER diagram and data-model details. The Prisma schema is the source of truth for constraints and relations.
+
+## Repository Structure
+
+```text
+devflow/
+├── apps/
+│   ├── web/                 # React frontend
+│   └── api/                 # Express API, Prisma, OpenAPI
+├── docker/                  # Local-production Compose and environment configuration
+├── docs/
+│   ├── screenshots/
+│   ├── architecture.md
+│   ├── database.md
+│   ├── getting-started.md
+│   ├── technical-decisions.md
+│   └── deployment.md
+├── .github/workflows/       # Automated checks and Docker image workflow
+├── pnpm-workspace.yaml
+└── README.md
 ```
 
-**Bu ZIP dosyası `.env`, `.env.test`, test kaynakları, package.json veya pnpm-lock.yaml değiştirmez.**
+## Getting Started
 
-## 2. Coverage thresholds
+### Prerequisites
 
-| Alan | Statements | Branches | Functions | Lines | Son bildirilen yerel ölçüm |
-| --- | ---: | ---: | ---: | ---: | --- |
-| API | 85% | 75% | 85% | 85% | 89.59 / 79.72 / 92.50 / 89.63 |
-| Web | 85% | 80% | 80% | 85% | 91.40 / 88.34 / 86.43 / 92.44 |
+- Node.js **24**
+- pnpm **12.18.0** (declared in the root `package.json`)
+- PostgreSQL **17** and Redis **7** (or equivalent reachable instances compatible with the project configuration)
+- Docker and Docker Compose for the container-based workflow
 
-Vitest coverage kontrolü eşik altına düşerse CI başarısız olur. Frontend raporuna LCOV çıktısı da eklendi. Coverage kapsamı değiştirilmedi (`src/main.tsx` hariç ve mevcut include/exclude kalıpları korunur).
+### Install dependencies
 
-## 3. Workflow davranışı
-
-### API CI
-
-- `push`, `pull_request` ve `workflow_dispatch` ile çalışır.
-- Node 24, root `packageManager`'dan pnpm, `pnpm install --frozen-lockfile`.
-- PostgreSQL 17 ve Redis 7 için geçici GitHub Actions servisleri (sırasıyla 5432 ve **6380**).
-- Ayrı `devflow_test` veritabanı ve yalnızca workflow'a ait test kullanıcı/parolası.
-- `apps/api/.env.test` dosyası CI runner'da hazırlanır; Git'e eklenmez.
-- Prisma Client `generate`; test DB üzerinde `prisma migrate deploy`; API typecheck/build; Vitest unit/integration + coverage.
-- API coverage artifact'ı 7 gün saklanır.
-
-### Web CI
-
-- `web-tests`: frontend typecheck (`test:typecheck` dahil), build ve unit/component + coverage eşikleri.
-- `browser-e2e`: `web-tests` başarılı olduktan sonra ayrı runner ve **ayrı** PostgreSQL/Redis servisleri ile başlar. Prisma migration'larını sadece CI test DB'sine uygular, API'yi 3000 portunda başlatır, CSRF endpoint + `Access-Control-Allow-Origin` doğrular, Playwright Chromium ile tüm 5 E2E testi çalıştırır.
-- `playwright install --with-deps chromium` kullanır; testler tek worker ve retry=0 olarak mevcut Playwright config tarafından yönetilir.
-- Hatalı E2E sonuçlarının izleri/raporları 3 gün saklanır. **Trace'ler test token/cookie bilgileri içerebilir**; GitHub artifact erişimi olan kişilerin bunları gizli test çıktısı olarak değerlendirmesi gerekir.
-- Yapılandırma gerçek geliştirici/production veritabanını veya Redis'i kullanmaz; `E2E_ISOLATED_DB=confirmed` yanında URL host/db/port kontrolleri uygular.
-
-## 4. Önkoşullar
-
-1. Monorepo kökünde `package.json` içinde `packageManager: "pnpm@..."` (son bilinen `pnpm@12.18.0`), `pnpm-lock.yaml`, `pnpm-workspace.yaml` bulunmalı. `pnpm-lock.yaml` değişiklikleri de commit'e dahil edilmeli.
-2. `apps/api/prisma.config.ts`, `apps/api/prisma/migrations/` veya uygulamanın kullandığı migrasyon yolu source control'e ekli olmalı. Prisma v7 migrasyonları `DATABASE_URL` ile test DB'ye uygulanır. Bu iki dosya/yol ZIP içinde bulunmaz ve ayrıca sağlanmış değildi.
-3. `@playwright/test` ve frontend Vitest paketleri `apps/web/package.json` ve lockfile'da kurulu olmalı (beş yerel Playwright testinin geçmesi kurulu olduklarına işaret ediyor, ancak Git'te commit edilip edilmedikleri ayrıca kontrol edilmeli).
-4. API `pnpm --filter @devflow/api build` sonrası `pnpm --dir apps/api start` komutuyla ayağa kalkmalı. `PORT=3000` ve `CLIENT_URL1=http://127.0.0.1:5173` env'leri kullanılmalı.
-5. Root `.gitignore` içinde şu kalıplar bulunmalı; *güncel .gitignore verilmediğinden otomatik değiştirilmedi*:
-   ```gitignore
-   **/.env.test
-   **/coverage/
-   **/playwright-report/
-   **/test-results/
-   ```
-6. GitHub Actions kullanımı için repo'da Actions etkin olmalı. Bu iş akışları GitHub-hosted Ubuntu runner ve Docker service container desteğine ihtiyaç duyar.
-
-## 5. Önce yerel testleri tekrar doğrula
+From the repository root:
 
 ```bash
-pnpm --filter @devflow/web test:typecheck
-pnpm --filter @devflow/web test:coverage
-pnpm --filter @devflow/web build
+corepack enable
+pnpm install --frozen-lockfile
+```
 
-# api .env.test / isolated local postgres / redis test servisi açıkken:
+Configure the API and web environments using `apps/api/.env.example`, `apps/web/.env.example`, and [Getting Started](docs/getting-started.md). The backend requires both PostgreSQL and Redis, as well as JWT and CSRF secrets. Never commit `.env` files or credentials.
+
+### Development workflow
+
+Start the required PostgreSQL/Redis services and apply the database migrations following the [Getting Started guide](docs/getting-started.md). The application development commands are:
+
+```bash
+pnpm dev:api
+pnpm dev:web
+```
+
+For complete environment variables, migration commands, and troubleshooting, see **[Getting Started](docs/getting-started.md)**.
+
+## Local Production with Docker
+
+DevFlow has been run and smoke-tested using the **local-production** Docker Compose stack, with healthy API, web, PostgreSQL, and Redis services. The author also verified project creation, task creation, Kanban status changes, data persistence, and logout/login flows.
+
+The stack serves the web application locally at **http://127.0.0.1:8080/** (also accessible as `http://localhost:8080/` on the same computer). PostgreSQL, Redis, and the API remain inside the production Compose network; only the web reverse proxy is exposed on the loopback interface.
+
+The local-production configuration intentionally supports local HTTP and must **not** be exposed directly to the public internet. Refer to [Deployment](docs/deployment.md) for the actual Docker build, migration, and Compose procedures.
+
+**No hosted demo or public domain is currently provided.**
+
+## Testing and Quality
+
+The repository includes unit, component, integration, and browser E2E testing infrastructure. Common commands:
+
+```bash
+# Backend
 pnpm --filter @devflow/api typecheck
+pnpm --filter @devflow/api test
 pnpm --filter @devflow/api build
-pnpm --filter @devflow/api exec vitest run --coverage
 
-# E2E için çalışır API + ayrı test DB ve Redis gerekir:
-E2E_ISOLATED_DB=confirmed \
-E2E_API_BASE_URL=http://127.0.0.1:3000/api/v1 \
-pnpm --filter @devflow/web exec playwright test --config playwright.config.ts
+# Frontend
+pnpm --filter @devflow/web typecheck
+pnpm --filter @devflow/web test:run
+pnpm --filter @devflow/web build
 ```
 
-API test komutu `apps/api/.env.test` içindeki `TEST_DATABASE_URL`'yi kullanır; bu dosya güvenli değilse testleri çalıştırma.
+Playwright E2E tests use their own environment and configuration. **Do not run integration/E2E tests against an important database** without confirming isolation. Local typechecking, API tests, and the Docker smoke test were reported successful; remote GitHub Actions results have not been independently verified here.
 
-## 6. Commit/push kontrolü (henüz yapma)
+## API Documentation
 
-```bash
-git status --short
-git diff -- .github/workflows/api-ci.yml .github/workflows/web-ci.yml apps/api/vitest.config.ts apps/web/vitest.config.ts
-git check-ignore -v apps/api/.env.test apps/web/coverage apps/web/test-results || true
-```
+The REST API is documented using **OpenAPI 3.1**. The maintained specification is located at:
 
-Yerel kontroller geçtikten sonra **ayrı feature branch**'te workflow'ları push ederek GitHub Actions'in `DevFlow API CI` ve `DevFlow Web CI` adımlarıyla gerçek runner doğrulaması yapılmalı. İlk başarılı GitHub Actions koşusuna kadar DEV-014 CI kabul kriteri tamamlandı diye işaretlenmemelidir. `API - Build...`, `Web - Typecheck...` ve `E2E - Chromium...` job'ları için repository ruleset / required status checks yapılandırılabilir.
+[`apps/api/docs/openapi/openapi.yaml`](apps/api/docs/openapi/openapi.yaml)
 
-## 7. Olası ilk-run sorunları
+Swagger UI is available at **http://localhost:3000/api-docs/** when enabled in the local API development environment. It may be disabled in production configurations, including the local-production Docker stack. The API uses the `/api/v1` prefix.
 
-| İşaret | Kontrol |
-| --- | --- |
-| `pnpm install --frozen-lockfile` başarısız | root lockfile, root `packageManager`, @playwright/test devDependency uyumu |
-| `prisma migrate deploy` başarısız | `prisma.config.ts`, committed migrations, Prisma 7 config DATABASE_URL kullanımı |
-| Backend start başarısız | Node build çıktısındaki `dist/index.js`, `pnpm --dir apps/api start`, Prisma generate |
-| API CORS ön kontrolü başarısız | `CLIENT_URL1=http://127.0.0.1:5173`, port 3000, backend logları |
-| Playwright tarayıcı açılmıyor | `playwright install --with-deps chromium`, @playwright/test sürüm uyumu |
-| Coverage eşik altında | İlgili `apps/{api,web}/coverage/index.html` raporları, kapsamı yapay düşürmeden kritik test ekleme |
+## Security
 
-**Test doğrulama notu:** Workflow YAML parse ve shell sözdizimi kontrolü yapıldı. Bu ortamda tam DevFlow monorepo, pnpm-lock.yaml, gerçek PostgreSQL/Redis, GitHub runner ve tarayıcı bulunmadığı için uçtan uca CI çalıştırılamadı.
+DevFlow implements authentication, resource-level authorization, Zod validation, CSRF protection, request rate limiting, security headers, and logging. Access tokens, refresh cookies, and role checks are handled by the backend. These measures are not a claim of a formal security audit.
+
+Use isolated test databases, keep secrets outside version control, and avoid disclosing personal information in screenshots or logs.
+
+## Documentation
+
+- [Getting Started](docs/getting-started.md)
+- [Architecture](docs/architecture.md)
+- [Database / ER Diagram](docs/database.md)
+- [Technical Decisions](docs/technical-decisions.md)
+- [Local Deployment](docs/deployment.md)
+- [OpenAPI Specification](apps/api/docs/openapi/openapi.yaml)
+
+## Release Status
+
+The next milestone is the **GitHub `v1.0.0` release**. Before tagging, review CI results, repository hygiene, screenshots, documentation links, and release notes. A release is **not** claimed to exist until the tag and GitHub release are published.
+
+## Why DevFlow?
+
+DevFlow is a practical learning project for full-stack engineering, with an emphasis on type safety, clear module boundaries, secure defaults, maintainable tests, and architectural trade-offs that are understandable and explainable.
+
+## License
+
+No license is declared in the provided README. Add a `LICENSE` file and update this section if you intend to grant reuse rights. Without a license, the repository should not be presented as open source under a specific license.

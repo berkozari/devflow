@@ -57,7 +57,7 @@ describe("Projects: HTTP service endpoints", () => {
     });
     it("propagates API errors without returning a successful response", async () => {
         http.post.mockRejectedValueOnce(new Error("network down"));
-        await expect(projectService.create({ name: "Launch" })).rejects.toThrow("network down");
+        await expect(projectService.create({ name: "Launch" })).rejects.toMatchObject({ message: "network down" });
     });
 });
 

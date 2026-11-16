@@ -56,6 +56,6 @@ describe("Tasks: HTTP service", () => {
 
     it("propagates HTTP failures rather than returning a successful response", async () => {
         http.patch.mockRejectedValueOnce(new Error("Server unavailable"));
-        await expect(taskService.move(projectId, taskId, { status: "DONE", beforeTaskId: null })).rejects.toThrow("Server unavailable");
+        await expect(taskService.move(projectId, taskId, { status: "DONE", beforeTaskId: null })).rejects.toMatchObject({ message: "Server unavailable" });
     });
 });

@@ -72,7 +72,7 @@ describe("Tasks: React Query keys, queries and mutations", () => {
         service.create.mockRejectedValueOnce(new Error("Create rejected"));
         const { result } = renderHook(() => useCreateTask(projectId), { wrapper });
         await act(async () => {
-            await expect(result.current.mutateAsync({ title: "New task" })).rejects.toThrow("Create rejected");
+            await expect(result.current.mutateAsync({ title: "New task" })).rejects.toMatchObject({ message: "Create rejected" });
         });
         expect(client.invalidateQueries).not.toHaveBeenCalled();
     });
@@ -98,7 +98,7 @@ describe("Tasks: React Query keys, queries and mutations", () => {
         service.update.mockRejectedValueOnce(new Error("Update rejected"));
         const { result } = renderHook(() => useUpdateTask(projectId), { wrapper });
         await act(async () => {
-            await expect(result.current.mutateAsync({ taskId: "task-1", data: { title: "New title" } })).rejects.toThrow("Update rejected");
+            await expect(result.current.mutateAsync({ taskId: "task-1", data: { title: "New title" } })).rejects.toMatchObject({ message: "Update rejected" });
         });
         expect(client.invalidateQueries).not.toHaveBeenCalled();
     });

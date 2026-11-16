@@ -1,0 +1,148 @@
+# DEV-015 — Local-production only. Not intended for public deployment.
+# Using a fixed project name isolates volumes/containers from development/test.
+name: devflow-prod-local
+
+x-api-connection: &api-connection
+  DATABASE_URL: "postgresql://${LOCAL_PROD_DB_USER:?Set LOCAL_PROD_DB_USER}:${LOCAL_PROD_DB_PASSWORD:?Set LOCAL_PROD_DB_PASSWORD}@postgres:5432/${LOCAL_PROD_DB_NAME:?Set LOCAL_PROD_DB_NAME}?schema=public"
+  REDIS_URL: "redis://:${LOCAL_PROD_REDIS_PASSWORD:?Set LOCAL_PROD_REDIS_PASSWORD}@redis:6379/0"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${LOCAL_PROD_DB_USER:?Set LOCAL_PROD_DB_USER}
+      POSTGRES_PASSWORD: ${LOCAL_PROD_DB_PASSWORD:?Set LOCAL_PROD_DB_PASSWORD}
+      POSTGRES_DB: ${LOCAL_PROD_DB_NAME:?Set LOCAL_PROD_DB_NAME}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    user: redis
+    environment:
+      REDIS_PASSWORD: ${LOCAL_PROD_REDIS_PASSWORD:?Set LOCAL_PROD_REDIS_PASSWORD}
+    command:
+      - /bin/sh
+      - -ec
+      - 'exec redis-server --save "" --appendonly no --requirepass "$$REDIS_PASSWORD"'
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$${REDIS_PASSWORD}\" redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+
+  # One-off migrations are explicitly invoked, never run on every API startup.
+  # This builds the EXISTING Dockerfile's builder stage, which has the Prisma CLI.
+  migrate:
+    profiles: [maintenance]
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+      target: builder
+    image: devflow-api-migrations:dev015
+    working_dir: /workspace/apps/api
+    command: ["pnpm", "exec", "prisma", "migrate", "deploy"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: "postgresql://${LOCAL_PROD_DB_USER:?Set LOCAL_PROD_DB_USER}:${LOCAL_PROD_DB_PASSWORD:?Set LOCAL_PROD_DB_PASSWORD}@postgres:5432/${LOCAL_PROD_DB_NAME:?Set LOCAL_PROD_DB_NAME}?schema=public"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+
+  api:
+    image: devflow-api:dev015
+    init: true
+    restart: unless-stopped
+    environment:
+      <<: *api-connection
+      NODE_ENV: production
+      LOCAL_PRODUCTION_HTTP: "true"
+      PORT: "3000"
+      CLIENT_URL1: http://localhost:8080
+      CLIENT_URL2: http://127.0.0.1:8080
+      JWT_SECRET: ${LOCAL_PROD_JWT_SECRET:?Set LOCAL_PROD_JWT_SECRET}
+      CSRF_SECRET: ${LOCAL_PROD_CSRF_SECRET:?Set LOCAL_PROD_CSRF_SECRET}
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "3000"
+    networks:
+      - edge
+      - data
+    healthcheck:
+      # Dependency-aware readiness, not an authenticated/CSRF endpoint.
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/v1/health/ready', {signal: AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+
+  web:
+    image: devflow-web:dev015
+    restart: unless-stopped
+    ports:
+      # Never publish on 0.0.0.0 or :: for this HTTP-only local environment.
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - edge
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+
+networks:
+  edge: {}
+  data:
+    internal: true
+
+volumes:
+  postgres_data: {}

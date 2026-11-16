@@ -1,0 +1,37 @@
+--- a/apps/api/src/app.ts
++++ b/apps/api/src/app.ts
+@@ -11,6 +11,7 @@
+ } from "./config/csrf.js";
+ 
+ import apiRouter from "./routes/index.js";
++import healthRouter from "./routes/health.routes.js";
+ 
+ import { notFoundHandler } from "./middlewares/not-found.middleware.js";
+ import { errorHandler } from "./middlewares/error.middleware.js";
+@@ -21,6 +22,9 @@
+ 
+ app.use(requestLogger);
+ app.use(helmet());
++
++// Health probes run before cookie, CSRF and application-route middleware.
++app.use("/api/v1/health", healthRouter);
+ 
+ const allowedOrigins = [
+     env.clientUrl1,
+--- a/docker/compose.prod-local.yaml
++++ b/docker/compose.prod-local.yaml
+@@ -104,12 +104,12 @@
+       - edge
+       - data
+     healthcheck:
+-      # Step 2 provisional HTTP check. Step 4 will add dedicated live/ready probes.
++      # Dependency-aware readiness, not an authenticated/CSRF endpoint.
+       test:
+         - CMD
+         - node
+         - -e
+-        - "fetch('http://127.0.0.1:3000/api/v1/auth/csrf-token').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
++        - "fetch('http://127.0.0.1:3000/api/v1/health/ready', {signal: AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+       interval: 15s
+       timeout: 5s
+       retries: 5

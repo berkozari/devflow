@@ -1,0 +1,52 @@
+# Source control, IDE and OS metadata
+.git
+.gitignore
+.github
+.DS_Store
+**/.DS_Store
+**/.idea
+**/.vscode
+
+# Secrets. Never bake runtime environment/configuration secrets into an image.
+.env
+.env.*
+**/.env
+**/.env.*
+.npmrc
+**/.npmrc
+**/*.pem
+**/*.key
+**/*.p12
+**/.ssh
+
+# Named local environment files must never enter ANY Docker build context.
+# In particular, the Compose-only local-production.env stores real credentials.
+docker/env/*.env
+**/local-production.env
+**/*.env
+
+# Host installs, generated data and test artifacts
+node_modules
+**/node_modules
+**/dist
+**/build
+**/coverage
+**/.turbo
+**/.next
+**/test-results
+**/playwright-report
+**/tests
+**/e2e
+**/src/generated/prisma
+
+# Local-only artifacts
+*.log
+*.zip
+*.tar
+*.tar.gz
+
+# PostgreSQL logical backups are sensitive and must never enter Docker builds.
+docker/backups/
+**/backups/
+**/*.dump
+**/*.dump.sha256

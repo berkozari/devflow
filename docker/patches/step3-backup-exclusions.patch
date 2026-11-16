@@ -1,0 +1,23 @@
+diff --git a/.dockerignore b/.dockerignore
+--- a/.dockerignore
++++ b/.dockerignore
+@@ -44,3 +44,9 @@
+ *.zip
+ *.tar
+ *.tar.gz
++
++# PostgreSQL logical backups are sensitive and must never enter Docker builds.
++docker/backups/
++**/backups/
++**/*.dump
++**/*.dump.sha256
+diff --git a/docker/.gitignore b/docker/.gitignore
+--- a/docker/.gitignore
++++ b/docker/.gitignore
+@@ -1,3 +1,6 @@
+ # DEV-015: local secrets must stay outside source control.
+ /env/*.env
+ !/env/*.env.example
++
++# Never commit unencrypted local PostgreSQL backup files.
++/backups/

@@ -5,7 +5,7 @@ import { env } from "./env.js";
 
 const refreshCookieBaseOptions: CookieOptions = {
     httpOnly: true,
-    secure: env.nodeEnv === "production",
+    secure: env.nodeEnv === "production" && !env.localProductionHttp,
     sameSite: "lax",
     path: "/api/v1/auth",
 };

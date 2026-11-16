@@ -50,3 +50,5 @@ docker/backups/
 **/backups/
 **/*.dump
 **/*.dump.sha256
+
+docker/releases/

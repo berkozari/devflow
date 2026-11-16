@@ -1,0 +1,31 @@
+# Overrides only API/Web image sources. Existing PostgreSQL, Redis, and volumes
+# stay unchanged in docker/compose.prod-local.yaml.
+# Supply DEVFLOW_API_IMAGE, DEVFLOW_WEB_IMAGE, DEVFLOW_MIGRATE_IMAGE in environment.
+services:
+  api:
+    image: ${DEVFLOW_API_IMAGE:?Set DEVFLOW_API_IMAGE}
+
+  web:
+    image: ${DEVFLOW_WEB_IMAGE:?Set DEVFLOW_WEB_IMAGE}
+
+  migrate-ghcr:
+    profiles: [release]
+    image: ${DEVFLOW_MIGRATE_IMAGE:?Set DEVFLOW_MIGRATE_IMAGE}
+    working_dir: /workspace/apps/api
+    command: ["pnpm", "exec", "prisma", "migrate", "deploy"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: "postgresql://${LOCAL_PROD_DB_USER:?Set LOCAL_PROD_DB_USER}:${LOCAL_PROD_DB_PASSWORD:?Set LOCAL_PROD_DB_PASSWORD}@postgres:5432/${LOCAL_PROD_DB_NAME:?Set LOCAL_PROD_DB_NAME}?schema=public"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
